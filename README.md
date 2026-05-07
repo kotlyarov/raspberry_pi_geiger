@@ -1,23 +1,19 @@
 # Raspberry Pi Geiger Counter
 
-Lightweight Tkinter GUI for counting Geiger tube interface pulses on a minimal Raspberry Pi OS Lite install. It is intended for old Raspberry Pi hardware and a small X/Openbox session, not the full Raspberry Pi OS Desktop.
+Lightweight Tkinter GUI for counting Geiger tube interface pulses on Raspberry Pi OS Lite. This version targets a Raspberry Pi 3 B running Raspberry Pi OS Lite 64-bit Trixie, image built 2026-04-21, with a minimal X/Openbox GUI installed by the project installer.
 
-## Files
+It does not use Electron, a browser app, a database, or a web server.
 
-- `app.py`: Tkinter GUI and GPIO pulse counter.
-- `install.sh`: first-boot installer for Raspberry Pi OS Lite.
-- `geiger-counter.desktop`: launcher template used by the installer.
-- `README.md`: this guide.
+## What The App Does
 
-## Hardware Safety
+- Counts pulses on BCM GPIO 4, physical pin 7.
+- Lets you edit the counting interval, defaulting to 10 seconds.
+- Disables Start while counting.
+- Shows raw pulse count, CPM, CPS, and status.
+- Re-enables Start when the interval finishes.
+- Includes simulation mode for development on non-Raspberry Pi computers.
 
-- Pulse input: BCM GPIO 4, physical pin 7.
-- Ground: connect the Geiger interface ground to any Raspberry Pi GND pin.
-- GPIO inputs are 3.3V only. Never feed 5V into a Raspberry Pi GPIO pin.
-- Use a 3.3V-safe Geiger interface, level shifter, optocoupler, transistor output, or other suitable protection circuit.
-- GPIO 4 is also the usual Raspberry Pi 1-Wire pin. If 1-Wire is enabled, it can conflict with this app. Disable 1-Wire or change `GPIO_PIN` in `app.py`.
-
-The default input settings are near the top of `app.py`:
+The input constants are near the top of `app.py`:
 
 ```python
 GPIO_PIN = 4
@@ -29,77 +25,95 @@ BOUNCE_TIME = None
 
 Debounce is not enabled by default.
 
-## Flash Raspberry Pi OS Lite
+## Hardware Safety
 
-1. Use Raspberry Pi Imager or another imaging tool.
-2. Select Raspberry Pi OS Lite 32-bit Trixie, release 21 Apr 2026.
-3. Flash the image to a microSD card.
-4. Configure hostname, user, password, Wi-Fi, and SSH if you need them.
+- Pulse input: BCM GPIO 4, physical pin 7.
+- Ground: connect the Geiger interface ground to any Raspberry Pi GND pin.
+- Raspberry Pi GPIO is 3.3V only. Never feed 5V into a GPIO pin.
+- Use a 3.3V-safe Geiger interface, level shifter, optocoupler, transistor output, or other suitable protection circuit.
+- GPIO 4 is also the usual Raspberry Pi 1-Wire pin. If 1-Wire is enabled, it can conflict with this app. Disable 1-Wire or change `GPIO_PIN` in `app.py`.
 
-Do not install Raspberry Pi OS Desktop or the recommended applications for this project.
+## Flash Raspberry Pi OS Lite 64-bit
 
-## Copy The App To The Boot Partition
+Use Raspberry Pi Imager.
 
-After flashing, mount the SD card boot partition on your computer.
+1. Choose Raspberry Pi 3.
+2. Select Raspberry Pi OS Lite 64-bit, Trixie, image built 2026-04-21.
+3. Open OS customisation before writing the card.
+4. Set hostname, username, password, locale, and Wi-Fi.
+5. Enable SSH if you want to install remotely.
+6. Write the image to the microSD card.
 
-Create this folder on the boot partition:
+This project is intended for Lite. Do not install Raspberry Pi OS Desktop or the recommended applications.
 
-```text
-geiger-app
-```
+You no longer need to copy this project onto the SD card boot partition. The Pi should connect to the Internet, clone the Git repository, and install from the clone.
 
-Copy these files into it:
+## First Boot
 
-```text
-app.py
-install.sh
-geiger-counter.desktop
-README.md
-```
+Boot the Raspberry Pi 3 B and log in locally or by SSH.
 
-On Raspberry Pi OS, that folder will normally appear after boot as:
-
-```text
-/boot/firmware/geiger-app
-```
-
-The installer also falls back to:
-
-```text
-/boot/geiger-app
-```
-
-## First Boot Install
-
-Boot the Raspberry Pi, log in, then run:
+If Wi-Fi was not configured in Raspberry Pi Imager, run:
 
 ```sh
-cd /boot/firmware/geiger-app
+sudo raspi-config
+```
+
+Then configure wireless LAN from the system options, reboot if needed, and log in again.
+
+Check that the network works:
+
+```sh
+ping -c 3 raspberrypi.com
+```
+
+Update package lists and install Git so the repository can be cloned:
+
+```sh
+sudo apt update
+sudo apt install -y --no-install-recommends git ca-certificates
+```
+
+Clone the app:
+
+```sh
+git clone https://github.com/kotlyarov/raspberry_pi_geiger.git
+cd raspberry_pi_geiger
+```
+
+Run the installer:
+
+```sh
 chmod +x install.sh
 ./install.sh
 ```
 
-If your system exposes the boot partition at `/boot/geiger-app`, use:
+The installer installs the required runtime packages:
 
-```sh
-cd /boot/geiger-app
-chmod +x install.sh
-./install.sh
+```text
+ca-certificates
+git
+openbox
+python3
+python3-gpiozero
+python3-rpi.gpio
+python3-tk
+rpd-x-core
+xinit
 ```
 
-The installer installs only the minimal GUI packages:
+It also tries to install `python3-lgpio` as an optional GPIO backend when that package is available. If that optional package cannot be installed, the app can still use `python3-rpi.gpio` on Raspberry Pi 3 B.
 
-```sh
-sudo apt install -y --no-install-recommends rpd-x-core openbox xinit python3-tk python3-gpiozero
-```
+Packages are installed with `--no-install-recommends` to keep the system small. The installer does not install the full desktop environment and does not install the recommended applications bundle.
 
-It copies the app to:
+## Installed Files
+
+The installer copies the runnable app to:
 
 ```text
 ~/geiger-app
 ```
 
-It creates launchers in:
+It creates desktop launchers in:
 
 ```text
 ~/.local/share/applications/geiger-counter.desktop
@@ -122,7 +136,7 @@ From an existing X session:
 python3 ~/geiger-app/app.py
 ```
 
-For testing on a non-Raspberry Pi machine:
+For testing on a non-Raspberry Pi computer:
 
 ```sh
 python3 ~/geiger-app/app.py --simulate
@@ -134,11 +148,11 @@ You can also force simulation mode with:
 GEIGER_SIMULATE=1 python3 ~/geiger-app/app.py
 ```
 
-## Optional Autostart
+## Optional Login Autostart
 
-The installer does not enable boot autostart by default.
+Autostart is disabled by default.
 
-To create an Openbox autostart file during install, run:
+To make the Pi run `startx` automatically after you log in on tty1, install with:
 
 ```sh
 GEIGER_AUTOSTART=1 ./install.sh
@@ -147,14 +161,34 @@ GEIGER_AUTOSTART=1 ./install.sh
 To disable it later:
 
 ```sh
-mv ~/.config/openbox/autostart ~/.config/openbox/autostart.disabled
+rm -f ~/.geiger-startx-on-login
 ```
 
-The `~/.xinitrc` file controls what runs when you type `startx`. Edit or remove that file if you want `startx` to open only Openbox.
+The installer adds a small marked block to `~/.profile` only when `GEIGER_AUTOSTART=1` is used. The block does nothing unless `~/.geiger-startx-on-login` exists.
+
+## Updating Later
+
+Because the app is installed from Git, later updates are simple:
+
+```sh
+cd ~/raspberry_pi_geiger
+git pull
+./install.sh
+```
+
+Then run:
+
+```sh
+startx
+```
+
+or restart the app if it is already open.
 
 ## Use
 
 1. Enter a count interval in seconds.
 2. Press Start.
-3. The Start button is disabled while pulses are counted.
-4. When the interval ends, the app shows raw pulse count, CPM, CPS, and status, then re-enables Start.
+3. Wait for the interval to finish.
+4. Read raw pulse count, CPM, CPS, and status.
+
+The Start button is disabled while the app is counting.

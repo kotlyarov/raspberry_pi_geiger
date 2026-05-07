@@ -2,29 +2,46 @@
 set -eu
 
 APP_NAME="geiger-app"
-BOOT_SOURCE="/boot/firmware/$APP_NAME"
-BOOT_SOURCE_FALLBACK="/boot/$APP_NAME"
 INSTALL_DIR="$HOME/$APP_NAME"
 APPLICATIONS_DIR="$HOME/.local/share/applications"
 DESKTOP_DIR="$HOME/Desktop"
-OPENBOX_DIR="$HOME/.config/openbox"
+AUTOSTART_FLAG="$HOME/.geiger-startx-on-login"
+PROFILE_FILE="$HOME/.profile"
+SOURCE_DIR=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)
 
-if [ -d "$BOOT_SOURCE" ]; then
-    SOURCE_DIR="$BOOT_SOURCE"
-elif [ -d "$BOOT_SOURCE_FALLBACK" ]; then
-    SOURCE_DIR="$BOOT_SOURCE_FALLBACK"
-else
-    SOURCE_DIR=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)
-fi
+APT_PACKAGES_REQUIRED="
+ca-certificates
+git
+openbox
+python3
+python3-gpiozero
+python3-rpi.gpio
+python3-tk
+rpd-x-core
+xinit
+"
+APT_PACKAGES_OPTIONAL="python3-lgpio"
 
 if [ ! -f "$SOURCE_DIR/app.py" ]; then
     echo "Cannot find app.py in $SOURCE_DIR" >&2
     exit 1
 fi
 
-echo "Installing minimal X/Openbox and Python packages..."
+if [ "$(uname -m)" != "aarch64" ]; then
+    echo "Warning: this installer is intended for Raspberry Pi OS Lite 64-bit." >&2
+    echo "Continuing anyway; simulation mode can still be useful off-device." >&2
+fi
+
+echo "Installing minimal X/Openbox, git, Python, Tkinter, and GPIO packages..."
 sudo apt update
-sudo apt install -y --no-install-recommends rpd-x-core openbox xinit python3-tk python3-gpiozero
+sudo apt install -y --no-install-recommends $APT_PACKAGES_REQUIRED
+
+if sudo apt install -y --no-install-recommends $APT_PACKAGES_OPTIONAL; then
+    echo "Installed optional GPIO backend: $APT_PACKAGES_OPTIONAL"
+else
+    echo "Optional GPIO backend $APT_PACKAGES_OPTIONAL was not installed."
+    echo "Continuing with python3-rpi.gpio, which is suitable for Raspberry Pi 3 B."
+fi
 
 echo "Copying app from $SOURCE_DIR to $INSTALL_DIR..."
 mkdir -p "$INSTALL_DIR"
@@ -57,12 +74,18 @@ else
 fi
 
 if [ "${GEIGER_AUTOSTART:-0}" = "1" ]; then
-    echo "Creating optional Openbox autostart..."
-    mkdir -p "$OPENBOX_DIR"
-    cat > "$OPENBOX_DIR/autostart" <<EOF
-# Remove or rename this file to disable Geiger Counter autostart.
-python3 "$INSTALL_DIR/app.py" &
+    echo "Enabling optional startx-on-login for tty1..."
+    touch "$AUTOSTART_FLAG"
+    if [ ! -f "$PROFILE_FILE" ] || ! grep -q "GEIGER COUNTER AUTOSTART" "$PROFILE_FILE"; then
+        cat >> "$PROFILE_FILE" <<'EOF'
+
+# GEIGER COUNTER AUTOSTART
+if [ -f "$HOME/.geiger-startx-on-login" ] && [ -z "$DISPLAY" ] && [ "$(tty)" = "/dev/tty1" ]; then
+    startx
+fi
+# END GEIGER COUNTER AUTOSTART
 EOF
+    fi
 fi
 
 echo
@@ -70,3 +93,5 @@ echo "Installed Geiger Counter."
 echo "Run it with: startx"
 echo "Or, from an existing X session: python3 $INSTALL_DIR/app.py"
 echo "For non-Raspberry Pi testing: python3 $INSTALL_DIR/app.py --simulate"
+echo "To update later: cd $SOURCE_DIR && git pull && ./install.sh"
+echo "To disable optional login autostart: rm -f $AUTOSTART_FLAG"
