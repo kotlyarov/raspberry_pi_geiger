@@ -13,24 +13,34 @@ GPIO_PIN = 17
 DEFAULT_INTERVAL_SECONDS = 10.0
 DEFAULT_PULL = "up"
 DEFAULT_ACTIVE_STATE = "low"
-DEFAULT_BOUNCE_MS = None
+DEFAULT_BOUNCE_MS = 25
 DEFAULT_POLL_INTERVAL_MS = 1.0
 
 SIMULATION_ENV = "GEIGER_SIMULATE"
 
 
 class PulseCounter:
-    def __init__(self):
+    def __init__(self, dead_time_ms):
         self._count = 0
+        self._last_pulse_time = None
+        self._dead_time_seconds = max(dead_time_ms / 1000.0, 0.0)
         self._lock = threading.Lock()
 
     def reset(self):
         with self._lock:
             self._count = 0
+            self._last_pulse_time = None
 
     def pulse(self, *_args):
+        now = time.monotonic()
         with self._lock:
+            if (
+                self._last_pulse_time is not None
+                and now - self._last_pulse_time < self._dead_time_seconds
+            ):
+                return
             self._count += 1
+            self._last_pulse_time = now
 
     def value(self):
         with self._lock:
@@ -56,7 +66,7 @@ class GpioPulseSource:
         GPIO.setup(pin, GPIO.IN, pull_up_down=self._pull_mode(GPIO, pull))
 
         kwargs = {"callback": lambda _channel: callback()}
-        if bounce_ms is not None:
+        if bounce_ms is not None and bounce_ms > 0:
             kwargs["bouncetime"] = bounce_ms
 
         try:
@@ -100,7 +110,7 @@ class GpioPulseSource:
 
     def _start_polling(self, active_state, bounce_ms, poll_interval_ms, callback):
         poll_interval = max(poll_interval_ms / 1000.0, 0.0001)
-        bounce_seconds = None if bounce_ms is None else bounce_ms / 1000.0
+        bounce_seconds = None if not bounce_ms else bounce_ms / 1000.0
         self._poll_stop_event = threading.Event()
         self._poll_thread = threading.Thread(
             target=self._poll_loop,
@@ -269,7 +279,10 @@ def parse_args(argv):
         "--bounce-ms",
         type=parse_bounce_ms,
         default=DEFAULT_BOUNCE_MS,
-        help="optional RPi.GPIO debounce time in milliseconds",
+        help=(
+            "software dead-time/debounce in milliseconds; default is "
+            f"{DEFAULT_BOUNCE_MS} ms, set 0 to disable"
+        ),
     )
     parser.add_argument(
         "--poll-interval-ms",
@@ -327,7 +340,7 @@ def make_pulse_source(args, counter):
 
 
 def count_for_interval(args):
-    counter = PulseCounter()
+    counter = PulseCounter(args.bounce_ms or 0)
     source = make_pulse_source(args, counter)
     progress = ProgressDisplay(should_show_progress(args), sys.stderr)
 

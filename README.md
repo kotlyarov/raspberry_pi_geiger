@@ -31,10 +31,10 @@ GPIO_PIN = 17
 DEFAULT_INTERVAL_SECONDS = 10.0
 DEFAULT_PULL = "up"
 DEFAULT_ACTIVE_STATE = "low"
-DEFAULT_BOUNCE_MS = None
+DEFAULT_BOUNCE_MS = 25
 ```
 
-Debounce is not enabled by default.
+Software dead-time/debounce defaults to 25 ms so one noisy pulse burst is less likely to be counted as many impulses. Set `--bounce-ms 0` to disable it.
 
 ## Hardware Safety
 
@@ -187,10 +187,17 @@ Count active-high pulses instead of active-low pulses:
 geiger.sh -10 --active-high --pull down
 ```
 
-Enable RPi.GPIO debounce:
+Use a smaller software dead-time/debounce:
 
 ```sh
 geiger.sh -10 --bounce-ms 5
+```
+
+For a noisy signal that counts far more impulses than the Geiger counter clicks, try a larger software dead-time:
+
+```sh
+geiger.sh -10 --bounce-ms 50
+geiger.sh -10 --bounce-ms 100
 ```
 
 If Raspberry Pi GPIO edge detection is unavailable, the app automatically falls back to polling the pin every 1 ms. To use a different fallback polling interval:
