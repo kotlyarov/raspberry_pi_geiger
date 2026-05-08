@@ -1,6 +1,6 @@
 # Raspberry Pi Geiger Counter
 
-Minimal command-line Geiger counter for Raspberry Pi OS Lite. This prototype counts pulses on a GPIO pin for a fixed interval and prints the result without installing a GUI, desktop environment, browser, database, or web server.
+Minimal Geiger counter for Raspberry Pi OS Lite. It can run as a command-line tool or as a tiny built-in HTTPS JSON API without installing a GUI, desktop environment, browser, database, nginx, Apache, or a Python web framework.
 
 The default command is:
 
@@ -22,6 +22,7 @@ When running in an interactive terminal, the app also shows a small counting-dot
 - Uses active-low pulses by default, with the internal pull-up enabled.
 - Accepts the shorthand `-10` to mean "count for 10 seconds".
 - Prints raw impulses, CPS, and CPM.
+- Can expose the same counting options through `https://<pi-ip>/geiger`.
 - Includes simulation mode for development on non-Raspberry Pi computers.
 
 The default input settings are near the top of `app.py`:
@@ -102,7 +103,10 @@ The installer installs only:
 
 ```text
 python3-rpi.gpio
+openssl
 ```
+
+`openssl` is used by the installer to create a local self-signed TLS certificate for the HTTPS API.
 
 The previous GUI packages are no longer installed:
 
@@ -134,6 +138,16 @@ It creates this command:
 ```text
 /usr/local/bin/geiger.sh
 ```
+
+It also creates local-only HTTPS API files:
+
+```text
+~/geiger-app/api.key
+~/geiger-app/server.crt
+~/geiger-app/server.key
+```
+
+These files are generated on the Raspberry Pi and should not be committed to Git.
 
 ## Run The Counter
 
@@ -210,6 +224,58 @@ Show all options:
 
 ```sh
 geiger.sh --help
+```
+
+## Run The HTTPS API
+
+The installer creates a lightweight systemd service that listens on port 443 when started:
+
+```sh
+sudo systemctl enable --now geiger-web.service
+```
+
+Read the generated API key:
+
+```sh
+cat ~/geiger-app/api.key
+```
+
+Then call the Raspberry Pi over HTTPS:
+
+```sh
+curl -k "https://192.168.0.1/geiger?key=XXXXXXXXX&s=10&pin=17"
+```
+
+The certificate is self-signed, so `curl -k` is expected unless you replace `~/geiger-app/server.crt` and `~/geiger-app/server.key` with a certificate trusted by your client.
+
+The response is JSON:
+
+```json
+{"impulses":3,"seconds":10,"cps":0.3,"cpm":18.0,"pin":17,"pull":"up","active_state":"low","bounce_ms":25,"poll_interval_ms":1.0,"simulate":false}
+```
+
+The `key` query parameter must match the 1-256 character key stored in `~/geiger-app/api.key`. The endpoint accepts the same counting options as the CLI:
+
+```text
+s=10
+seconds=10
+pin=17
+pull=up|down|off
+active=low|high
+active-low=1
+active-high=1
+bounce-ms=25
+poll-interval-ms=1
+simulate=1
+```
+
+To run the HTTPS API manually instead of through systemd:
+
+```sh
+sudo geiger.sh --serve \
+  --api-key-file ~/geiger-app/api.key \
+  --cert-file ~/geiger-app/server.crt \
+  --tls-key-file ~/geiger-app/server.key
 ```
 
 ## Troubleshooting

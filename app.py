@@ -2,11 +2,16 @@
 """Command-line Geiger pulse counter for Raspberry Pi GPIO."""
 
 import argparse
+import hmac
+import json
 import os
 import random
+import ssl
 import sys
 import threading
 import time
+from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
+from urllib.parse import parse_qs, urlparse
 
 
 GPIO_PIN = 17
@@ -15,8 +20,19 @@ DEFAULT_PULL = "up"
 DEFAULT_ACTIVE_STATE = "low"
 DEFAULT_BOUNCE_MS = 25
 DEFAULT_POLL_INTERVAL_MS = 1.0
+DEFAULT_WEB_HOST = "0.0.0.0"
+DEFAULT_WEB_PORT = 443
+MAX_API_KEY_LENGTH = 256
 
 SIMULATION_ENV = "GEIGER_SIMULATE"
+API_KEY_FILE_ENV = "GEIGER_API_KEY_FILE"
+TLS_CERT_FILE_ENV = "GEIGER_TLS_CERT_FILE"
+TLS_KEY_FILE_ENV = "GEIGER_TLS_KEY_FILE"
+
+APP_DIR = os.path.dirname(os.path.abspath(__file__))
+DEFAULT_API_KEY_FILE = os.path.join(APP_DIR, "api.key")
+DEFAULT_TLS_CERT_FILE = os.path.join(APP_DIR, "server.crt")
+DEFAULT_TLS_KEY_FILE = os.path.join(APP_DIR, "server.key")
 
 
 class PulseCounter:
@@ -234,6 +250,18 @@ def parse_positive_float(name):
     return parser
 
 
+def parse_port(value):
+    try:
+        port = int(value)
+    except ValueError as exc:
+        raise argparse.ArgumentTypeError("port must be an integer") from exc
+
+    if port < 1 or port > 65535:
+        raise argparse.ArgumentTypeError("port must be between 1 and 65535")
+
+    return port
+
+
 def env_requests_simulation():
     return os.environ.get(SIMULATION_ENV, "").lower() in {"1", "true", "yes", "on"}
 
@@ -308,6 +336,39 @@ def parse_args(argv):
         action="store_true",
         help="disable the counting progress animation",
     )
+    parser.add_argument(
+        "--serve",
+        action="store_true",
+        help="run the lightweight HTTPS JSON API instead of one terminal count",
+    )
+    parser.add_argument(
+        "--host",
+        default=DEFAULT_WEB_HOST,
+        help=f"HTTPS API bind address; default is {DEFAULT_WEB_HOST}",
+    )
+    parser.add_argument(
+        "--port",
+        type=parse_port,
+        default=DEFAULT_WEB_PORT,
+        help=f"HTTPS API port; default is {DEFAULT_WEB_PORT}",
+    )
+    parser.add_argument(
+        "--api-key-file",
+        "--key-file",
+        dest="api_key_file",
+        default=os.environ.get(API_KEY_FILE_ENV, DEFAULT_API_KEY_FILE),
+        help="file containing the 1-256 character API key for HTTPS requests",
+    )
+    parser.add_argument(
+        "--cert-file",
+        default=os.environ.get(TLS_CERT_FILE_ENV, DEFAULT_TLS_CERT_FILE),
+        help="TLS certificate file for the HTTPS API",
+    )
+    parser.add_argument(
+        "--tls-key-file",
+        default=os.environ.get(TLS_KEY_FILE_ENV, DEFAULT_TLS_KEY_FILE),
+        help="TLS private key file for the HTTPS API",
+    )
     return parser.parse_args(argv)
 
 
@@ -366,29 +427,269 @@ def count_for_interval(args):
         source.close()
 
 
+def result_from_count(count, args):
+    seconds = args.seconds
+    cps = count / seconds
+    cpm = cps * 60.0
+    return {
+        "impulses": count,
+        "seconds": int(seconds) if float(seconds).is_integer() else seconds,
+        "cps": round(cps, 3),
+        "cpm": round(cpm, 1),
+        "pin": args.pin,
+        "pull": args.pull,
+        "active_state": args.active_state,
+        "bounce_ms": args.bounce_ms,
+        "poll_interval_ms": args.poll_interval_ms,
+        "simulate": bool(args.simulate or env_requests_simulation()),
+    }
+
+
+def format_result_line(result):
+    return " ".join(
+        (
+            f"impulses={result['impulses']}",
+            f"seconds={format_seconds(result['seconds'])}",
+            f"cps={result['cps']:.3f}",
+            f"cpm={result['cpm']:.1f}",
+        )
+    )
+
+
+def count_and_summarize(args):
+    return result_from_count(count_for_interval(args), args)
+
+
+def read_api_key(path):
+    try:
+        with open(path, "r", encoding="utf-8") as key_file:
+            key = key_file.read().strip()
+    except OSError as exc:
+        raise RuntimeError(f"cannot read API key file {path}: {exc}") from exc
+
+    if not key:
+        raise RuntimeError(f"API key file {path} is empty")
+    if len(key) > MAX_API_KEY_LENGTH:
+        raise RuntimeError(
+            f"API key file {path} is longer than {MAX_API_KEY_LENGTH} characters"
+        )
+
+    return key
+
+
+def parse_bool_query(value, name):
+    if value == "":
+        return True
+
+    normalized = value.lower()
+    if normalized in {"1", "true", "yes", "on"}:
+        return True
+    if normalized in {"0", "false", "no", "off"}:
+        return False
+
+    raise ValueError(f"{name} must be true or false")
+
+
+def single_query_value(params, *names):
+    for name in names:
+        if name not in params:
+            continue
+
+        values = params[name]
+        if len(values) != 1:
+            raise ValueError(f"{name} may only be supplied once")
+        return values[0]
+
+    return None
+
+
+def parse_query_with_parser(params, parser, *names):
+    value = single_query_value(params, *names)
+    if value is None:
+        return None
+
+    try:
+        return parser(value)
+    except argparse.ArgumentTypeError as exc:
+        raise ValueError(str(exc)) from exc
+
+
+def geiger_args_from_query(params, base_args):
+    args = argparse.Namespace(
+        seconds=base_args.seconds,
+        pin=base_args.pin,
+        pull=base_args.pull,
+        active_state=base_args.active_state,
+        bounce_ms=base_args.bounce_ms,
+        poll_interval_ms=base_args.poll_interval_ms,
+        simulate=base_args.simulate,
+        progress=False,
+        no_progress=True,
+    )
+
+    seconds = parse_query_with_parser(params, parse_seconds, "s", "seconds")
+    if seconds is not None:
+        args.seconds = seconds
+
+    pin = single_query_value(params, "pin")
+    if pin is not None:
+        try:
+            args.pin = int(pin)
+        except ValueError as exc:
+            raise ValueError("pin must be an integer") from exc
+
+    pull = single_query_value(params, "pull")
+    if pull is not None:
+        if pull not in {"up", "down", "off"}:
+            raise ValueError("pull must be one of: up, down, off")
+        args.pull = pull
+
+    active_state = single_query_value(
+        params, "active", "active-state", "active_state"
+    )
+    if active_state is not None:
+        if active_state not in {"high", "low"}:
+            raise ValueError("active must be high or low")
+        args.active_state = active_state
+
+    active_high = single_query_value(params, "active-high", "active_high")
+    active_low = single_query_value(params, "active-low", "active_low")
+    if active_high is not None and parse_bool_query(active_high, "active-high"):
+        args.active_state = "high"
+    if active_low is not None and parse_bool_query(active_low, "active-low"):
+        args.active_state = "low"
+
+    bounce_ms = parse_query_with_parser(
+        params, parse_bounce_ms, "bounce-ms", "bounce_ms"
+    )
+    if bounce_ms is not None:
+        args.bounce_ms = bounce_ms
+
+    poll_interval_ms = parse_query_with_parser(
+        params,
+        parse_positive_float("poll-interval-ms"),
+        "poll-interval-ms",
+        "poll_interval_ms",
+    )
+    if poll_interval_ms is not None:
+        args.poll_interval_ms = poll_interval_ms
+
+    simulate = single_query_value(params, "simulate")
+    if simulate is not None:
+        args.simulate = parse_bool_query(simulate, "simulate")
+
+    return args
+
+
+class GeigerRequestHandler(BaseHTTPRequestHandler):
+    server_version = "GeigerHTTP/1.0"
+
+    def do_GET(self):
+        parsed = urlparse(self.path)
+        if parsed.path != "/geiger":
+            self._send_json(404, {"error": "not_found"})
+            return
+
+        try:
+            params = parse_qs(parsed.query, keep_blank_values=True)
+            request_key = single_query_value(params, "key")
+        except ValueError as exc:
+            self._send_json(400, {"error": "bad_request", "message": str(exc)})
+            return
+
+        if request_key is None or not hmac.compare_digest(
+            request_key.encode("utf-8"), self.server.api_key_bytes
+        ):
+            self._send_json(401, {"error": "unauthorized"})
+            return
+
+        try:
+            request_args = geiger_args_from_query(params, self.server.base_args)
+        except ValueError as exc:
+            self._send_json(400, {"error": "bad_request", "message": str(exc)})
+            return
+
+        if not self.server.count_lock.acquire(blocking=False):
+            self._send_json(409, {"error": "busy"})
+            return
+
+        try:
+            result = count_and_summarize(request_args)
+        except RuntimeError as exc:
+            self._send_json(
+                500,
+                {
+                    "error": "runtime_error",
+                    "message": str(exc),
+                },
+            )
+            return
+        finally:
+            self.server.count_lock.release()
+
+        self._send_json(200, result)
+
+    def _send_json(self, status, data):
+        body = json.dumps(data, separators=(",", ":")).encode("utf-8") + b"\n"
+        self.send_response(status)
+        self.send_header("Content-Type", "application/json")
+        self.send_header("Content-Length", str(len(body)))
+        self.send_header("Cache-Control", "no-store")
+        self.end_headers()
+        self.wfile.write(body)
+
+    def log_message(self, fmt, *args):
+        print(f"geiger-api: {self.address_string()} - {fmt % args}", file=sys.stderr)
+
+
+def run_web_service(args):
+    api_key = read_api_key(args.api_key_file)
+
+    server = ThreadingHTTPServer((args.host, args.port), GeigerRequestHandler)
+    server.api_key_bytes = api_key.encode("utf-8")
+    server.base_args = args
+    server.count_lock = threading.Lock()
+
+    context = ssl.SSLContext(ssl.PROTOCOL_TLS_SERVER)
+    try:
+        context.load_cert_chain(certfile=args.cert_file, keyfile=args.tls_key_file)
+        server.socket = context.wrap_socket(server.socket, server_side=True)
+    except (OSError, ssl.SSLError) as exc:
+        server.server_close()
+        raise RuntimeError(f"cannot start HTTPS server: {exc}") from exc
+
+    print(
+        f"geiger: HTTPS API listening on https://{args.host}:{args.port}/geiger",
+        file=sys.stderr,
+    )
+    try:
+        server.serve_forever()
+    except KeyboardInterrupt:
+        pass
+    finally:
+        server.server_close()
+
+    return 0
+
+
 def main(argv=None):
     args = parse_args(sys.argv[1:] if argv is None else argv)
 
+    if args.serve:
+        try:
+            return run_web_service(args)
+        except (OSError, RuntimeError) as exc:
+            print(f"geiger: {exc}", file=sys.stderr)
+            return 2
+
     try:
-        count = count_for_interval(args)
+        result = count_and_summarize(args)
     except RuntimeError as exc:
         print(f"geiger: {exc}", file=sys.stderr)
         print("geiger: for off-device testing, run with --simulate", file=sys.stderr)
         return 2
 
-    seconds = args.seconds
-    cps = count / seconds
-    cpm = cps * 60.0
-    print(
-        " ".join(
-            (
-                f"impulses={count}",
-                f"seconds={format_seconds(seconds)}",
-                f"cps={cps:.3f}",
-                f"cpm={cpm:.1f}",
-            )
-        )
-    )
+    print(format_result_line(result))
     return 0
 
 
