@@ -18,7 +18,7 @@ When running in an interactive terminal, the app also shows a small counting-dot
 
 ## What The App Does
 
-- Counts pulses on BCM GPIO 4, physical pin 7.
+- Counts pulses on BCM GPIO 17, physical pin 11.
 - Uses active-low pulses by default, with the internal pull-up enabled.
 - Accepts the shorthand `-10` to mean "count for 10 seconds".
 - Prints raw impulses, CPS, and CPM.
@@ -27,7 +27,7 @@ When running in an interactive terminal, the app also shows a small counting-dot
 The default input settings are near the top of `app.py`:
 
 ```python
-GPIO_PIN = 4
+GPIO_PIN = 17
 DEFAULT_INTERVAL_SECONDS = 10.0
 DEFAULT_PULL = "up"
 DEFAULT_ACTIVE_STATE = "low"
@@ -38,11 +38,11 @@ Debounce is not enabled by default.
 
 ## Hardware Safety
 
-- Pulse input: BCM GPIO 4, physical pin 7.
+- Pulse input: BCM GPIO 17, physical pin 11.
 - Ground: connect the Geiger interface ground to any Raspberry Pi GND pin.
 - Raspberry Pi GPIO is 3.3V only. Never feed 5V into a GPIO pin.
 - Use a 3.3V-safe Geiger interface, level shifter, optocoupler, transistor output, or other suitable protection circuit.
-- GPIO 4 is also the usual Raspberry Pi 1-Wire pin. If 1-Wire is enabled, it can conflict with this app. Disable 1-Wire or run with another pin, for example `geiger.sh -10 --pin 17`.
+- GPIO 17 is a plain general-purpose GPIO pin. If you move the pulse input to another pin, pass its BCM number with `--pin`.
 
 ## Flash Raspberry Pi OS Lite 64-bit
 
@@ -178,7 +178,7 @@ GEIGER_SIMULATE=1 geiger.sh -10
 Use a different BCM GPIO pin:
 
 ```sh
-geiger.sh -10 --pin 17
+geiger.sh -10 --pin 22
 ```
 
 Count active-high pulses instead of active-low pulses:
@@ -219,10 +219,10 @@ If counting stays at zero, try:
 
 ```sh
 geiger.sh -10 --active-high --pull down
-geiger.sh -10 --pin 17
+geiger.sh -10 --pin 22
 ```
 
-Also check that 1-Wire is disabled if you are using GPIO 4.
+If you choose to use GPIO 4 instead, also check that 1-Wire is disabled.
 
 ## Updating Later
 

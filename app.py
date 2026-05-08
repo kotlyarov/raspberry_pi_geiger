@@ -9,7 +9,7 @@ import threading
 import time
 
 
-GPIO_PIN = 4
+GPIO_PIN = 17
 DEFAULT_INTERVAL_SECONDS = 10.0
 DEFAULT_PULL = "up"
 DEFAULT_ACTIVE_STATE = "low"
