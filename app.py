@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Small Tkinter Geiger counter GUI for Raspberry Pi GPIO pulses."""
+"""Command-line Geiger pulse counter for Raspberry Pi GPIO."""
 
 import argparse
 import os
@@ -7,264 +7,305 @@ import random
 import sys
 import threading
 import time
-import tkinter as tk
-from tkinter import messagebox, ttk
 
 
 GPIO_PIN = 4
-DEFAULT_INTERVAL_SECONDS = 10
-PULL_UP = True
-ACTIVE_STATE = False
-BOUNCE_TIME = None
-
+DEFAULT_INTERVAL_SECONDS = 10.0
+DEFAULT_PULL = "up"
+DEFAULT_ACTIVE_STATE = "low"
+DEFAULT_BOUNCE_MS = None
 
 SIMULATION_ENV = "GEIGER_SIMULATE"
 
 
-class GeigerCounterApp:
-    def __init__(self, root, force_simulation=False):
-        self.root = root
-        self.force_simulation = force_simulation
-        self.simulation_mode = force_simulation
-        self.gpio_device = None
-
+class PulseCounter:
+    def __init__(self):
         self._count = 0
-        self._counting = False
-        self._count_lock = threading.Lock()
-        self._start_time = None
-        self._selected_interval = DEFAULT_INTERVAL_SECONDS
-        self._finish_after_id = None
-        self._refresh_after_id = None
-        self._simulation_after_id = None
+        self._lock = threading.Lock()
 
-        self.interval_var = tk.StringVar(value=str(DEFAULT_INTERVAL_SECONDS))
-        self.count_var = tk.StringVar(value="0")
-        self.cpm_var = tk.StringVar(value="--")
-        self.cps_var = tk.StringVar(value="--")
-        self.mode_var = tk.StringVar(value="Mode: starting")
-        self.status_var = tk.StringVar(value="Starting")
-
-        self._build_gui()
-        self._configure_pulse_source()
-
-        self.root.protocol("WM_DELETE_WINDOW", self.close)
-
-    def _build_gui(self):
-        self.root.title("Geiger Counter")
-        self.root.resizable(False, False)
-
-        main = ttk.Frame(self.root, padding=12)
-        main.grid(row=0, column=0, sticky="nsew")
-
-        interval_label = ttk.Label(main, text="Interval (s)")
-        interval_label.grid(row=0, column=0, sticky="w")
-
-        self.interval_entry = ttk.Entry(
-            main,
-            textvariable=self.interval_var,
-            width=8,
-            justify="right",
-        )
-        self.interval_entry.grid(row=0, column=1, sticky="ew", padx=(8, 8))
-
-        self.start_button = ttk.Button(main, text="Start", command=self.start_counting)
-        self.start_button.grid(row=0, column=2, sticky="ew")
-
-        separator = ttk.Separator(main)
-        separator.grid(row=1, column=0, columnspan=3, sticky="ew", pady=10)
-
-        self._add_value_row(main, 2, "Raw pulses", self.count_var)
-        self._add_value_row(main, 3, "CPM", self.cpm_var)
-        self._add_value_row(main, 4, "CPS", self.cps_var)
-
-        mode_label = ttk.Label(main, textvariable=self.mode_var)
-        mode_label.grid(row=5, column=0, columnspan=3, sticky="w", pady=(10, 0))
-
-        status_label = ttk.Label(main, textvariable=self.status_var, wraplength=260)
-        status_label.grid(row=6, column=0, columnspan=3, sticky="w", pady=(4, 0))
-
-        main.columnconfigure(1, weight=1)
-        self.interval_entry.focus_set()
-
-    def _add_value_row(self, parent, row, label_text, variable):
-        label = ttk.Label(parent, text=label_text)
-        label.grid(row=row, column=0, sticky="w", pady=2)
-
-        value = ttk.Label(parent, textvariable=variable, anchor="e", font=("TkDefaultFont", 16, "bold"))
-        value.grid(row=row, column=1, columnspan=2, sticky="ew", pady=2)
-
-    def _configure_pulse_source(self):
-        if self.force_simulation:
-            self._use_simulation("simulation requested")
-            return
-
-        try:
-            from gpiozero import DigitalInputDevice
-
-            self.gpio_device = DigitalInputDevice(
-                GPIO_PIN,
-                pull_up=PULL_UP,
-                active_state=ACTIVE_STATE,
-                bounce_time=BOUNCE_TIME,
-            )
-            self.gpio_device.when_activated = self._handle_pulse
-        except Exception as exc:
-            self._use_simulation(f"GPIO unavailable: {exc}")
-            return
-
-        edge = "active-low" if ACTIVE_STATE is False else "active-high"
-        self.mode_var.set(f"Mode: GPIO BCM {GPIO_PIN} ({edge})")
-        self.status_var.set("Ready")
-
-    def _use_simulation(self, reason):
-        self.simulation_mode = True
-        self.mode_var.set("Mode: simulation")
-        self.status_var.set(f"Ready ({reason})")
-
-    def start_counting(self):
-        try:
-            interval = float(self.interval_var.get().strip())
-        except ValueError:
-            self._show_interval_error()
-            return
-
-        if interval <= 0:
-            self._show_interval_error()
-            return
-
-        self._selected_interval = interval
-        with self._count_lock:
+    def reset(self):
+        with self._lock:
             self._count = 0
 
-        self.count_var.set("0")
-        self.cpm_var.set("--")
-        self.cps_var.set("--")
-        self._counting = True
-        self._start_time = time.monotonic()
-
-        self.start_button.state(["disabled"])
-        self.interval_entry.state(["disabled"])
-
-        self.status_var.set(f"Counting for {self._format_seconds(interval)} seconds")
-        self._finish_after_id = self.root.after(int(interval * 1000), self.finish_counting)
-        self._refresh_display()
-
-        if self.simulation_mode:
-            self._schedule_simulation_pulse()
-
-    def _show_interval_error(self):
-        messagebox.showerror("Invalid interval", "Enter a counting interval greater than 0 seconds.")
-        self.interval_entry.focus_set()
-        self.interval_entry.select_range(0, tk.END)
-
-    def _handle_pulse(self):
-        if not self._counting:
-            return
-
-        with self._count_lock:
+    def pulse(self, *_args):
+        with self._lock:
             self._count += 1
 
-    def _schedule_simulation_pulse(self):
-        if not self._counting or not self.simulation_mode:
-            return
-
-        delay_ms = random.randint(120, 900)
-        self._simulation_after_id = self.root.after(delay_ms, self._simulation_pulse)
-
-    def _simulation_pulse(self):
-        if not self._counting:
-            return
-
-        self._handle_pulse()
-        self._schedule_simulation_pulse()
-
-    def _refresh_display(self):
-        if not self._counting:
-            return
-
-        elapsed = max(time.monotonic() - self._start_time, 0.001)
-        count = self._current_count()
-        self.count_var.set(str(count))
-        self.cpm_var.set(f"{count * 60.0 / elapsed:.1f}")
-        self.cps_var.set(f"{count / elapsed:.3f}")
-        self._refresh_after_id = self.root.after(250, self._refresh_display)
-
-    def finish_counting(self):
-        if not self._counting:
-            return
-
-        self._counting = False
-        self._cancel_after("_refresh_after_id")
-        self._cancel_after("_simulation_after_id")
-
-        count = self._current_count()
-        interval = self._selected_interval
-        self.count_var.set(str(count))
-        self.cpm_var.set(f"{count * 60.0 / interval:.1f}")
-        self.cps_var.set(f"{count / interval:.3f}")
-        self.status_var.set("Done. Ready")
-
-        self.interval_entry.state(["!disabled"])
-        self.start_button.state(["!disabled"])
-        self.start_button.focus_set()
-
-    def _current_count(self):
-        with self._count_lock:
+    def value(self):
+        with self._lock:
             return self._count
 
-    def _cancel_after(self, attr_name):
-        after_id = getattr(self, attr_name)
-        if after_id is None:
-            return
 
+class GpioPulseSource:
+    def __init__(self, pin, pull, active_state, bounce_ms, callback):
         try:
-            self.root.after_cancel(after_id)
-        except tk.TclError:
-            pass
-        setattr(self, attr_name, None)
+            import RPi.GPIO as GPIO
+        except ImportError as exc:
+            raise RuntimeError(
+                "RPi.GPIO is not installed. Run install.sh or install "
+                "python3-rpi.gpio with apt."
+            ) from exc
+
+        self._GPIO = GPIO
+        self._pin = pin
+
+        GPIO.setmode(GPIO.BCM)
+        GPIO.setup(pin, GPIO.IN, pull_up_down=self._pull_mode(GPIO, pull))
+
+        kwargs = {"callback": lambda _channel: callback()}
+        if bounce_ms is not None:
+            kwargs["bouncetime"] = bounce_ms
+
+        GPIO.add_event_detect(pin, self._edge_mode(GPIO, active_state), **kwargs)
 
     def close(self):
-        self._counting = False
-        self._cancel_after("_finish_after_id")
-        self._cancel_after("_refresh_after_id")
-        self._cancel_after("_simulation_after_id")
+        try:
+            self._GPIO.remove_event_detect(self._pin)
+        except Exception:
+            pass
 
-        if self.gpio_device is not None:
-            try:
-                self.gpio_device.close()
-            except Exception:
-                pass
-
-        self.root.destroy()
+        try:
+            self._GPIO.cleanup(self._pin)
+        except Exception:
+            pass
 
     @staticmethod
-    def _format_seconds(seconds):
-        if seconds.is_integer():
-            return str(int(seconds))
-        return f"{seconds:g}"
+    def _pull_mode(GPIO, pull):
+        if pull == "up":
+            return GPIO.PUD_UP
+        if pull == "down":
+            return GPIO.PUD_DOWN
+        return GPIO.PUD_OFF
+
+    @staticmethod
+    def _edge_mode(GPIO, active_state):
+        if active_state == "high":
+            return GPIO.RISING
+        return GPIO.FALLING
 
 
-def parse_args(argv):
-    parser = argparse.ArgumentParser(description="Lightweight Tkinter Geiger counter GUI.")
-    parser.add_argument(
-        "--simulate",
-        action="store_true",
-        help="run without GPIO and generate simulated pulses",
-    )
-    return parser.parse_args(argv)
+class SimulatedPulseSource:
+    def __init__(self, callback):
+        self._callback = callback
+        self._stop_event = threading.Event()
+        self._thread = threading.Thread(target=self._run, daemon=True)
+        self._thread.start()
+
+    def close(self):
+        self._stop_event.set()
+        self._thread.join(timeout=1.0)
+
+    def _run(self):
+        while not self._stop_event.is_set():
+            if self._stop_event.wait(random.uniform(0.12, 0.9)):
+                return
+            self._callback()
+
+
+class ProgressDisplay:
+    def __init__(self, enabled, stream):
+        self._enabled = enabled
+        self._stream = stream
+        self._dots = 0
+        self._last_line_length = 0
+        self._last_update = 0.0
+
+    def update(self, remaining, count, *, force=False):
+        if not self._enabled:
+            return
+
+        now = time.monotonic()
+        if not force and now - self._last_update < 0.2:
+            return
+
+        self._last_update = now
+        self._dots = (self._dots % 4) + 1
+        dot_text = "." * self._dots
+        line = f"Counting {remaining:5.1f}s left | impulses {count} {dot_text:<4}"
+        self._write_line(line)
+
+    def finish(self, count):
+        if not self._enabled:
+            return
+
+        self._write_line(f"Counting done           | impulses {count}")
+        self._stream.write("\n")
+        self._stream.flush()
+
+    def _write_line(self, line):
+        padding = " " * max(0, self._last_line_length - len(line))
+        self._stream.write(f"\r{line}{padding}")
+        self._stream.flush()
+        self._last_line_length = len(line)
+
+
+def parse_seconds(value):
+    try:
+        seconds = float(value)
+    except ValueError as exc:
+        raise argparse.ArgumentTypeError("seconds must be a number") from exc
+
+    seconds = abs(seconds)
+    if seconds <= 0:
+        raise argparse.ArgumentTypeError("seconds must be greater than zero")
+
+    return seconds
+
+
+def parse_bounce_ms(value):
+    try:
+        bounce_ms = int(value)
+    except ValueError as exc:
+        raise argparse.ArgumentTypeError("bounce-ms must be an integer") from exc
+
+    if bounce_ms < 0:
+        raise argparse.ArgumentTypeError("bounce-ms must be zero or greater")
+
+    return bounce_ms
 
 
 def env_requests_simulation():
     return os.environ.get(SIMULATION_ENV, "").lower() in {"1", "true", "yes", "on"}
 
 
+def parse_args(argv):
+    parser = argparse.ArgumentParser(
+        prog="geiger.sh",
+        description=(
+            "Count Geiger interface impulses on a Raspberry Pi GPIO pin. "
+            "The shorthand '-10' is accepted and means count for 10 seconds."
+        )
+    )
+    parser.add_argument(
+        "seconds",
+        nargs="?",
+        type=parse_seconds,
+        default=DEFAULT_INTERVAL_SECONDS,
+        help="counting interval in seconds, for example -10 or 60",
+    )
+    parser.add_argument("--pin", type=int, default=GPIO_PIN, help="BCM GPIO pin")
+    parser.add_argument(
+        "--pull",
+        choices=("up", "down", "off"),
+        default=DEFAULT_PULL,
+        help="GPIO internal pull resistor",
+    )
+    parser.add_argument(
+        "--active-high",
+        action="store_const",
+        dest="active_state",
+        const="high",
+        default=DEFAULT_ACTIVE_STATE,
+        help="count rising edges instead of falling edges",
+    )
+    parser.add_argument(
+        "--active-low",
+        action="store_const",
+        dest="active_state",
+        const="low",
+        help="count falling edges; this is the default",
+    )
+    parser.add_argument(
+        "--bounce-ms",
+        type=parse_bounce_ms,
+        default=DEFAULT_BOUNCE_MS,
+        help="optional RPi.GPIO debounce time in milliseconds",
+    )
+    parser.add_argument(
+        "--simulate",
+        action="store_true",
+        help="generate fake pulses for testing without GPIO hardware",
+    )
+    parser.add_argument(
+        "--progress",
+        action="store_true",
+        help="force the counting progress animation",
+    )
+    parser.add_argument(
+        "--no-progress",
+        action="store_true",
+        help="disable the counting progress animation",
+    )
+    return parser.parse_args(argv)
+
+
+def should_show_progress(args):
+    if args.no_progress:
+        return False
+    if args.progress:
+        return True
+    return sys.stderr.isatty()
+
+
+def format_seconds(seconds):
+    if float(seconds).is_integer():
+        return str(int(seconds))
+    return f"{seconds:g}"
+
+
+def make_pulse_source(args, counter):
+    if args.simulate or env_requests_simulation():
+        return SimulatedPulseSource(counter.pulse)
+
+    return GpioPulseSource(
+        pin=args.pin,
+        pull=args.pull,
+        active_state=args.active_state,
+        bounce_ms=args.bounce_ms,
+        callback=counter.pulse,
+    )
+
+
+def count_for_interval(args):
+    counter = PulseCounter()
+    source = make_pulse_source(args, counter)
+    progress = ProgressDisplay(should_show_progress(args), sys.stderr)
+
+    try:
+        counter.reset()
+        start = time.monotonic()
+        end = start + args.seconds
+        progress.update(args.seconds, 0, force=True)
+
+        while True:
+            now = time.monotonic()
+            remaining = end - now
+            if remaining <= 0:
+                break
+
+            time.sleep(min(0.05, remaining))
+            progress.update(max(end - time.monotonic(), 0.0), counter.value())
+
+        count = counter.value()
+        progress.finish(count)
+        return count
+    finally:
+        source.close()
+
+
 def main(argv=None):
     args = parse_args(sys.argv[1:] if argv is None else argv)
-    force_simulation = args.simulate or env_requests_simulation()
 
-    root = tk.Tk()
-    GeigerCounterApp(root, force_simulation=force_simulation)
-    root.mainloop()
+    try:
+        count = count_for_interval(args)
+    except RuntimeError as exc:
+        print(f"geiger: {exc}", file=sys.stderr)
+        print("geiger: for off-device testing, run with --simulate", file=sys.stderr)
+        return 2
+
+    seconds = args.seconds
+    cps = count / seconds
+    cpm = cps * 60.0
+    print(
+        " ".join(
+            (
+                f"impulses={count}",
+                f"seconds={format_seconds(seconds)}",
+                f"cps={cps:.3f}",
+                f"cpm={cpm:.1f}",
+            )
+        )
+    )
     return 0
 
 

@@ -1,8 +1,0 @@
-[Desktop Entry]
-Type=Application
-Name=Geiger Counter
-Comment=Lightweight GPIO Geiger counter
-Exec=python3 @APP_DIR@/app.py
-Terminal=false
-Categories=Utility;
-StartupNotify=false

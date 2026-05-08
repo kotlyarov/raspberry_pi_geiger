@@ -1,26 +1,37 @@
 # Raspberry Pi Geiger Counter
 
-Lightweight Tkinter GUI for counting Geiger tube interface pulses on Raspberry Pi OS Lite. This version targets a Raspberry Pi 3 B running Raspberry Pi OS Lite 64-bit Trixie, image built 2026-04-21, with a minimal X/Openbox GUI installed by the project installer.
+Minimal command-line Geiger counter for Raspberry Pi OS Lite. This prototype counts pulses on a GPIO pin for a fixed interval and prints the result without installing a GUI, desktop environment, browser, database, or web server.
 
-It does not use Electron, a browser app, a database, or a web server.
+The default command is:
+
+```sh
+geiger.sh -10
+```
+
+That counts impulses for the next 10 seconds and prints a result like:
+
+```text
+impulses=3 seconds=10 cps=0.300 cpm=18.0
+```
+
+When running in an interactive terminal, the app also shows a small counting-dot progress animation on stderr while it waits.
 
 ## What The App Does
 
 - Counts pulses on BCM GPIO 4, physical pin 7.
-- Lets you edit the counting interval, defaulting to 10 seconds.
-- Disables Start while counting.
-- Shows raw pulse count, CPM, CPS, and status.
-- Re-enables Start when the interval finishes.
+- Uses active-low pulses by default, with the internal pull-up enabled.
+- Accepts the shorthand `-10` to mean "count for 10 seconds".
+- Prints raw impulses, CPS, and CPM.
 - Includes simulation mode for development on non-Raspberry Pi computers.
 
-The input constants are near the top of `app.py`:
+The default input settings are near the top of `app.py`:
 
 ```python
 GPIO_PIN = 4
-DEFAULT_INTERVAL_SECONDS = 10
-PULL_UP = True
-ACTIVE_STATE = False
-BOUNCE_TIME = None
+DEFAULT_INTERVAL_SECONDS = 10.0
+DEFAULT_PULL = "up"
+DEFAULT_ACTIVE_STATE = "low"
+DEFAULT_BOUNCE_MS = None
 ```
 
 Debounce is not enabled by default.
@@ -31,14 +42,14 @@ Debounce is not enabled by default.
 - Ground: connect the Geiger interface ground to any Raspberry Pi GND pin.
 - Raspberry Pi GPIO is 3.3V only. Never feed 5V into a GPIO pin.
 - Use a 3.3V-safe Geiger interface, level shifter, optocoupler, transistor output, or other suitable protection circuit.
-- GPIO 4 is also the usual Raspberry Pi 1-Wire pin. If 1-Wire is enabled, it can conflict with this app. Disable 1-Wire or change `GPIO_PIN` in `app.py`.
+- GPIO 4 is also the usual Raspberry Pi 1-Wire pin. If 1-Wire is enabled, it can conflict with this app. Disable 1-Wire or run with another pin, for example `geiger.sh -10 --pin 17`.
 
 ## Flash Raspberry Pi OS Lite 64-bit
 
 Use Raspberry Pi Imager.
 
 1. Choose Raspberry Pi 3.
-2. Select Raspberry Pi OS Lite 64-bit, Trixie, image built 2026-04-21.
+2. Select Raspberry Pi OS Lite 64-bit.
 3. Open OS customisation before writing the card.
 4. Set hostname, username, password, locale, and Wi-Fi.
 5. Enable SSH if you want to install remotely.
@@ -46,11 +57,9 @@ Use Raspberry Pi Imager.
 
 This project is intended for Lite. Do not install Raspberry Pi OS Desktop or the recommended applications.
 
-You no longer need to copy this project onto the SD card boot partition. The Pi should connect to the Internet, clone the Git repository, and install from the clone.
-
 ## First Boot
 
-Boot the Raspberry Pi 3 B and log in locally or by SSH.
+Boot the Raspberry Pi and log in locally or by SSH.
 
 If Wi-Fi was not configured in Raspberry Pi Imager, run:
 
@@ -66,7 +75,7 @@ Check that the network works:
 ping -c 3 raspberrypi.com
 ```
 
-Update package lists and install Git so the repository can be cloned:
+Install only the tools needed to clone from GitHub:
 
 ```sh
 sudo apt update
@@ -87,84 +96,108 @@ chmod +x install.sh
 ./install.sh
 ```
 
-The installer installs the required runtime packages:
+## Minimal Runtime Packages
+
+The installer installs only:
 
 ```text
-ca-certificates
-git
-openbox
-python3
-python3-gpiozero
 python3-rpi.gpio
+```
+
+The previous GUI packages are no longer installed:
+
+```text
+openbox
+python3-gpiozero
+python3-lgpio
 python3-tk
 rpd-x-core
 xinit
 ```
 
-It also tries to install `python3-lgpio` as an optional GPIO backend when that package is available. If that optional package cannot be installed, the app can still use `python3-rpi.gpio` on Raspberry Pi 3 B.
+Packages are installed with `--no-install-recommends`. After installing, the script also runs `apt clean` and removes apt package lists to save disk space. If you want to keep apt package lists for later package work, install with:
 
-Packages are installed with `--no-install-recommends` to keep the system small. The installer does not install the full desktop environment and does not install the recommended applications bundle.
+```sh
+GEIGER_KEEP_APT_CACHE=1 ./install.sh
+```
 
 ## Installed Files
 
-The installer copies the runnable app to:
+The installer copies the app to:
 
 ```text
 ~/geiger-app
 ```
 
-It creates desktop launchers in:
+It creates this command:
 
 ```text
-~/.local/share/applications/geiger-counter.desktop
-~/Desktop/geiger-counter.desktop
+/usr/local/bin/geiger.sh
 ```
 
-If `~/.xinitrc` does not already exist, the installer creates one so `startx` launches Openbox and the Geiger Counter app.
+## Run The Counter
 
-## Run The App
-
-From the text console:
+Count for 10 seconds:
 
 ```sh
-startx
+geiger.sh -10
 ```
 
-From an existing X session:
+Count for 60 seconds:
 
 ```sh
-python3 ~/geiger-app/app.py
+geiger.sh -60
+```
+
+Disable the progress animation:
+
+```sh
+geiger.sh -10 --no-progress
+```
+
+Run from the cloned repository before installing:
+
+```sh
+./geiger.sh -10
 ```
 
 For testing on a non-Raspberry Pi computer:
 
 ```sh
-python3 ~/geiger-app/app.py --simulate
+./geiger.sh -10 --simulate
 ```
 
 You can also force simulation mode with:
 
 ```sh
-GEIGER_SIMULATE=1 python3 ~/geiger-app/app.py
+GEIGER_SIMULATE=1 geiger.sh -10
 ```
 
-## Optional Login Autostart
+## Useful Options
 
-Autostart is disabled by default.
-
-To make the Pi run `startx` automatically after you log in on tty1, install with:
+Use a different BCM GPIO pin:
 
 ```sh
-GEIGER_AUTOSTART=1 ./install.sh
+geiger.sh -10 --pin 17
 ```
 
-To disable it later:
+Count active-high pulses instead of active-low pulses:
 
 ```sh
-rm -f ~/.geiger-startx-on-login
+geiger.sh -10 --active-high --pull down
 ```
 
-The installer adds a small marked block to `~/.profile` only when `GEIGER_AUTOSTART=1` is used. The block does nothing unless `~/.geiger-startx-on-login` exists.
+Enable RPi.GPIO debounce:
+
+```sh
+geiger.sh -10 --bounce-ms 5
+```
+
+Show all options:
+
+```sh
+geiger.sh --help
+```
 
 ## Updating Later
 
@@ -175,20 +208,3 @@ cd ~/raspberry_pi_geiger
 git pull
 ./install.sh
 ```
-
-Then run:
-
-```sh
-startx
-```
-
-or restart the app if it is already open.
-
-## Use
-
-1. Enter a count interval in seconds.
-2. Press Start.
-3. Wait for the interval to finish.
-4. Read raw pulse count, CPM, CPS, and status.
-
-The Start button is disabled while the app is counting.
