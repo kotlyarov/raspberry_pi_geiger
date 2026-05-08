@@ -193,11 +193,36 @@ Enable RPi.GPIO debounce:
 geiger.sh -10 --bounce-ms 5
 ```
 
+If Raspberry Pi GPIO edge detection is unavailable, the app automatically falls back to polling the pin every 1 ms. To use a different fallback polling interval:
+
+```sh
+geiger.sh -10 --poll-interval-ms 0.5
+```
+
 Show all options:
 
 ```sh
 geiger.sh --help
 ```
+
+## Troubleshooting
+
+If you see this warning:
+
+```text
+geiger: edge detection unavailable (Failed to add edge detection); using GPIO polling every 1 ms
+```
+
+the app is still running. It means `python3-rpi.gpio` could read the GPIO pin but could not enable kernel edge interrupts, so the app switched to a tiny polling loop instead.
+
+If counting stays at zero, try:
+
+```sh
+geiger.sh -10 --active-high --pull down
+geiger.sh -10 --pin 17
+```
+
+Also check that 1-Wire is disabled if you are using GPIO 4.
 
 ## Updating Later
 

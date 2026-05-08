@@ -14,6 +14,7 @@ DEFAULT_INTERVAL_SECONDS = 10.0
 DEFAULT_PULL = "up"
 DEFAULT_ACTIVE_STATE = "low"
 DEFAULT_BOUNCE_MS = None
+DEFAULT_POLL_INTERVAL_MS = 1.0
 
 SIMULATION_ENV = "GEIGER_SIMULATE"
 
@@ -37,7 +38,7 @@ class PulseCounter:
 
 
 class GpioPulseSource:
-    def __init__(self, pin, pull, active_state, bounce_ms, callback):
+    def __init__(self, pin, pull, active_state, bounce_ms, poll_interval_ms, callback):
         try:
             import RPi.GPIO as GPIO
         except ImportError as exc:
@@ -48,6 +49,8 @@ class GpioPulseSource:
 
         self._GPIO = GPIO
         self._pin = pin
+        self._poll_stop_event = None
+        self._poll_thread = None
 
         GPIO.setmode(GPIO.BCM)
         GPIO.setup(pin, GPIO.IN, pull_up_down=self._pull_mode(GPIO, pull))
@@ -56,9 +59,21 @@ class GpioPulseSource:
         if bounce_ms is not None:
             kwargs["bouncetime"] = bounce_ms
 
-        GPIO.add_event_detect(pin, self._edge_mode(GPIO, active_state), **kwargs)
+        try:
+            GPIO.add_event_detect(pin, self._edge_mode(GPIO, active_state), **kwargs)
+        except RuntimeError as exc:
+            print(
+                "geiger: edge detection unavailable "
+                f"({exc}); using GPIO polling every {poll_interval_ms:g} ms",
+                file=sys.stderr,
+            )
+            self._start_polling(active_state, bounce_ms, poll_interval_ms, callback)
 
     def close(self):
+        if self._poll_stop_event is not None:
+            self._poll_stop_event.set()
+            self._poll_thread.join(timeout=1.0)
+
         try:
             self._GPIO.remove_event_detect(self._pin)
         except Exception:
@@ -82,6 +97,36 @@ class GpioPulseSource:
         if active_state == "high":
             return GPIO.RISING
         return GPIO.FALLING
+
+    def _start_polling(self, active_state, bounce_ms, poll_interval_ms, callback):
+        poll_interval = max(poll_interval_ms / 1000.0, 0.0001)
+        bounce_seconds = None if bounce_ms is None else bounce_ms / 1000.0
+        self._poll_stop_event = threading.Event()
+        self._poll_thread = threading.Thread(
+            target=self._poll_loop,
+            args=(active_state, bounce_seconds, poll_interval, callback),
+            daemon=True,
+        )
+        self._poll_thread.start()
+
+    def _poll_loop(self, active_state, bounce_seconds, poll_interval, callback):
+        was_active = self._is_active(active_state)
+        last_pulse_time = 0.0
+
+        while not self._poll_stop_event.wait(poll_interval):
+            active = self._is_active(active_state)
+            if active and not was_active:
+                now = time.monotonic()
+                if bounce_seconds is None or now - last_pulse_time >= bounce_seconds:
+                    callback()
+                    last_pulse_time = now
+            was_active = active
+
+    def _is_active(self, active_state):
+        value = self._GPIO.input(self._pin)
+        if active_state == "high":
+            return value == self._GPIO.HIGH
+        return value == self._GPIO.LOW
 
 
 class SimulatedPulseSource:
@@ -164,6 +209,21 @@ def parse_bounce_ms(value):
     return bounce_ms
 
 
+def parse_positive_float(name):
+    def parser(value):
+        try:
+            number = float(value)
+        except ValueError as exc:
+            raise argparse.ArgumentTypeError(f"{name} must be a number") from exc
+
+        if number <= 0:
+            raise argparse.ArgumentTypeError(f"{name} must be greater than zero")
+
+        return number
+
+    return parser
+
+
 def env_requests_simulation():
     return os.environ.get(SIMULATION_ENV, "").lower() in {"1", "true", "yes", "on"}
 
@@ -212,6 +272,15 @@ def parse_args(argv):
         help="optional RPi.GPIO debounce time in milliseconds",
     )
     parser.add_argument(
+        "--poll-interval-ms",
+        type=parse_positive_float("poll-interval-ms"),
+        default=DEFAULT_POLL_INTERVAL_MS,
+        help=(
+            "GPIO polling interval used only if edge detection is unavailable; "
+            "default is 1 ms"
+        ),
+    )
+    parser.add_argument(
         "--simulate",
         action="store_true",
         help="generate fake pulses for testing without GPIO hardware",
@@ -252,6 +321,7 @@ def make_pulse_source(args, counter):
         pull=args.pull,
         active_state=args.active_state,
         bounce_ms=args.bounce_ms,
+        poll_interval_ms=args.poll_interval_ms,
         callback=counter.pulse,
     )
 
