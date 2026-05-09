@@ -582,6 +582,11 @@ def geiger_args_from_query(params, base_args):
 class GeigerRequestHandler(BaseHTTPRequestHandler):
     server_version = "GeigerHTTP/1.0"
 
+    def do_OPTIONS(self):
+        self.send_response(204)
+        self._send_common_headers(0)
+        self.end_headers()
+
     def do_GET(self):
         parsed = urlparse(self.path)
         if parsed.path != "/geiger":
@@ -630,11 +635,17 @@ class GeigerRequestHandler(BaseHTTPRequestHandler):
     def _send_json(self, status, data):
         body = json.dumps(data, separators=(",", ":")).encode("utf-8") + b"\n"
         self.send_response(status)
-        self.send_header("Content-Type", "application/json")
-        self.send_header("Content-Length", str(len(body)))
-        self.send_header("Cache-Control", "no-store")
+        self._send_common_headers(len(body))
         self.end_headers()
         self.wfile.write(body)
+
+    def _send_common_headers(self, content_length):
+        self.send_header("Content-Type", "application/json")
+        self.send_header("Content-Length", str(content_length))
+        self.send_header("Cache-Control", "no-store")
+        self.send_header("Access-Control-Allow-Origin", "*")
+        self.send_header("Access-Control-Allow-Methods", "GET, OPTIONS")
+        self.send_header("Access-Control-Allow-Headers", "Content-Type")
 
     def log_message(self, fmt, *args):
         print(f"geiger-api: {self.address_string()} - {fmt % args}", file=sys.stderr)

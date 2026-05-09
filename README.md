@@ -278,6 +278,18 @@ sudo geiger.sh --serve \
   --tls-key-file ~/geiger-app/server.key
 ```
 
+## Browser Control Page
+
+The repository includes a standalone browser page:
+
+```text
+web/index.html
+```
+
+You can open that file on another computer. It asks for the Raspberry Pi IP or host, password, seconds, and optional GPIO settings. The page stores the Pi host and password in that browser's local storage so you do not need to re-enter them every time.
+
+Because the API certificate is self-signed, browsers may block the page's request until the certificate is accepted or trusted on that computer. If that happens, open `https://<raspberry-pi-ip>/` in the same browser, accept the certificate warning, then return to `web/index.html` and run the count again.
+
 ## Troubleshooting
 
 If you see this warning:
