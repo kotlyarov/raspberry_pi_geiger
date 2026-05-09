@@ -142,7 +142,7 @@ It creates this command:
 It also creates local-only HTTPS API files:
 
 ```text
-~/geiger-app/api.key
+~/geiger-app/password.txt
 ~/geiger-app/server.crt
 ~/geiger-app/server.key
 ```
@@ -234,16 +234,16 @@ The installer creates a lightweight systemd service that listens on port 443 whe
 sudo systemctl enable --now geiger-web.service
 ```
 
-Read the generated API key:
+Read the generated 10-character password:
 
 ```sh
-cat ~/geiger-app/api.key
+cat ~/geiger-app/password.txt
 ```
 
 Then call the Raspberry Pi over HTTPS:
 
 ```sh
-curl -k "https://192.168.0.1/geiger?key=XXXXXXXXX&s=10&pin=17"
+curl -k "https://192.168.0.1/geiger?pwd=XXXXXXXXXX&s=10&pin=17"
 ```
 
 The certificate is self-signed, so `curl -k` is expected unless you replace `~/geiger-app/server.crt` and `~/geiger-app/server.key` with a certificate trusted by your client.
@@ -254,7 +254,7 @@ The response is JSON:
 {"impulses":3,"seconds":10,"cps":0.3,"cpm":18.0,"pin":17,"pull":"up","active_state":"low","bounce_ms":25,"poll_interval_ms":1.0,"simulate":false}
 ```
 
-The `key` query parameter must match the 1-256 character key stored in `~/geiger-app/api.key`. The endpoint accepts the same counting options as the CLI:
+The `pwd` query parameter must match the 10-character password stored in `~/geiger-app/password.txt`. The endpoint accepts the same counting options as the CLI:
 
 ```text
 s=10
@@ -273,7 +273,7 @@ To run the HTTPS API manually instead of through systemd:
 
 ```sh
 sudo geiger.sh --serve \
-  --api-key-file ~/geiger-app/api.key \
+  --password-file ~/geiger-app/password.txt \
   --cert-file ~/geiger-app/server.crt \
   --tls-key-file ~/geiger-app/server.key
 ```

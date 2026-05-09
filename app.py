@@ -22,15 +22,15 @@ DEFAULT_BOUNCE_MS = 25
 DEFAULT_POLL_INTERVAL_MS = 1.0
 DEFAULT_WEB_HOST = "0.0.0.0"
 DEFAULT_WEB_PORT = 443
-MAX_API_KEY_LENGTH = 256
+PASSWORD_LENGTH = 10
 
 SIMULATION_ENV = "GEIGER_SIMULATE"
-API_KEY_FILE_ENV = "GEIGER_API_KEY_FILE"
+PASSWORD_FILE_ENV = "GEIGER_PASSWORD_FILE"
 TLS_CERT_FILE_ENV = "GEIGER_TLS_CERT_FILE"
 TLS_KEY_FILE_ENV = "GEIGER_TLS_KEY_FILE"
 
 APP_DIR = os.path.dirname(os.path.abspath(__file__))
-DEFAULT_API_KEY_FILE = os.path.join(APP_DIR, "api.key")
+DEFAULT_PASSWORD_FILE = os.path.join(APP_DIR, "password.txt")
 DEFAULT_TLS_CERT_FILE = os.path.join(APP_DIR, "server.crt")
 DEFAULT_TLS_KEY_FILE = os.path.join(APP_DIR, "server.key")
 
@@ -353,11 +353,11 @@ def parse_args(argv):
         help=f"HTTPS API port; default is {DEFAULT_WEB_PORT}",
     )
     parser.add_argument(
-        "--api-key-file",
-        "--key-file",
-        dest="api_key_file",
-        default=os.environ.get(API_KEY_FILE_ENV, DEFAULT_API_KEY_FILE),
-        help="file containing the 1-256 character API key for HTTPS requests",
+        "--password-file",
+        "--pwd-file",
+        dest="password_file",
+        default=os.environ.get(PASSWORD_FILE_ENV, DEFAULT_PASSWORD_FILE),
+        help=f"file containing the {PASSWORD_LENGTH} character HTTPS password",
     )
     parser.add_argument(
         "--cert-file",
@@ -460,21 +460,19 @@ def count_and_summarize(args):
     return result_from_count(count_for_interval(args), args)
 
 
-def read_api_key(path):
+def read_password(path):
     try:
-        with open(path, "r", encoding="utf-8") as key_file:
-            key = key_file.read().strip()
+        with open(path, "r", encoding="utf-8") as password_file:
+            password = password_file.read().strip()
     except OSError as exc:
-        raise RuntimeError(f"cannot read API key file {path}: {exc}") from exc
+        raise RuntimeError(f"cannot read password file {path}: {exc}") from exc
 
-    if not key:
-        raise RuntimeError(f"API key file {path} is empty")
-    if len(key) > MAX_API_KEY_LENGTH:
+    if len(password) != PASSWORD_LENGTH:
         raise RuntimeError(
-            f"API key file {path} is longer than {MAX_API_KEY_LENGTH} characters"
+            f"password file {path} must contain exactly {PASSWORD_LENGTH} characters"
         )
 
-    return key
+    return password
 
 
 def parse_bool_query(value, name):
@@ -592,13 +590,13 @@ class GeigerRequestHandler(BaseHTTPRequestHandler):
 
         try:
             params = parse_qs(parsed.query, keep_blank_values=True)
-            request_key = single_query_value(params, "key")
+            request_password = single_query_value(params, "pwd")
         except ValueError as exc:
             self._send_json(400, {"error": "bad_request", "message": str(exc)})
             return
 
-        if request_key is None or not hmac.compare_digest(
-            request_key.encode("utf-8"), self.server.api_key_bytes
+        if request_password is None or not hmac.compare_digest(
+            request_password.encode("utf-8"), self.server.password_bytes
         ):
             self._send_json(401, {"error": "unauthorized"})
             return
@@ -643,10 +641,10 @@ class GeigerRequestHandler(BaseHTTPRequestHandler):
 
 
 def run_web_service(args):
-    api_key = read_api_key(args.api_key_file)
+    password = read_password(args.password_file)
 
     server = ThreadingHTTPServer((args.host, args.port), GeigerRequestHandler)
-    server.api_key_bytes = api_key.encode("utf-8")
+    server.password_bytes = password.encode("utf-8")
     server.base_args = args
     server.count_lock = threading.Lock()
 

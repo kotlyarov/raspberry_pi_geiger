@@ -5,7 +5,7 @@ APP_NAME="geiger-app"
 INSTALL_DIR="$HOME/$APP_NAME"
 BIN_DIR="/usr/local/bin"
 BIN_PATH="$BIN_DIR/geiger.sh"
-API_KEY_PATH="$INSTALL_DIR/api.key"
+PASSWORD_PATH="$INSTALL_DIR/password.txt"
 TLS_CERT_PATH="$INSTALL_DIR/server.crt"
 TLS_KEY_PATH="$INSTALL_DIR/server.key"
 SERVICE_NAME="geiger-web.service"
@@ -57,19 +57,19 @@ echo "Creating command: $BIN_PATH"
 sudo mkdir -p "$BIN_DIR"
 sudo ln -sf "$INSTALL_DIR/geiger.sh" "$BIN_PATH"
 
-echo "Preparing HTTPS API key..."
-if [ ! -f "$API_KEY_PATH" ]; then
+echo "Preparing HTTPS password..."
+if [ ! -f "$PASSWORD_PATH" ]; then
     old_umask=$(umask)
     umask 077
-    python3 -c 'import secrets; print(secrets.token_urlsafe(32))' > "$API_KEY_PATH"
+    python3 -c 'import secrets, string; alphabet = string.ascii_letters + string.digits; print("".join(secrets.choice(alphabet) for _ in range(10)))' > "$PASSWORD_PATH"
     umask "$old_umask"
 fi
-chmod 600 "$API_KEY_PATH"
+chmod 600 "$PASSWORD_PATH"
 
-api_key=$(tr -d '\r\n' < "$API_KEY_PATH")
-api_key_length=$(printf '%s' "$api_key" | wc -c | tr -d ' ')
-if [ "$api_key_length" -lt 1 ] || [ "$api_key_length" -gt 256 ]; then
-    echo "API key in $API_KEY_PATH must be 1-256 characters long" >&2
+password=$(tr -d '\r\n' < "$PASSWORD_PATH")
+password_length=$(printf '%s' "$password" | wc -c | tr -d ' ')
+if [ "$password_length" -ne 10 ]; then
+    echo "Password in $PASSWORD_PATH must be exactly 10 characters long" >&2
     exit 1
 fi
 
@@ -103,7 +103,7 @@ Wants=network-online.target
 [Service]
 Type=simple
 WorkingDirectory=$INSTALL_DIR
-ExecStart=$BIN_PATH --serve --host 0.0.0.0 --port 443 --api-key-file $API_KEY_PATH --cert-file $TLS_CERT_PATH --tls-key-file $TLS_KEY_PATH --no-progress
+ExecStart=$BIN_PATH --serve --host 0.0.0.0 --port 443 --password-file $PASSWORD_PATH --cert-file $TLS_CERT_PATH --tls-key-file $TLS_KEY_PATH --no-progress
 Restart=on-failure
 RestartSec=5
 Environment=PYTHONUNBUFFERED=1
@@ -123,7 +123,7 @@ echo
 echo "Installed Geiger Counter CLI and HTTPS API."
 echo "Run it with: geiger.sh -10"
 echo "Start HTTPS API with: sudo systemctl enable --now $SERVICE_NAME"
-echo "API key file: $API_KEY_PATH"
-echo "HTTPS request: https://<raspberry-pi-ip>/geiger?key=<key>&s=10&pin=17"
+echo "Password file: $PASSWORD_PATH"
+echo "HTTPS request: https://<raspberry-pi-ip>/geiger?pwd=<password>&s=10&pin=17"
 echo "For non-Raspberry Pi testing: geiger.sh -10 --simulate"
 echo "To update later: cd $SOURCE_DIR && git pull && ./install.sh"

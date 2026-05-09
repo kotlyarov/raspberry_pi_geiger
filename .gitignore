@@ -1,4 +1,5 @@
 api.key
+password.txt
 server.crt
 server.key
 *.pem
