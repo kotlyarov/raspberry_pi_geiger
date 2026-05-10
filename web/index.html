@@ -345,11 +345,6 @@
       background: #f3fbf6;
     }
 
-    .cert-link {
-      color: inherit;
-      font-weight: 750;
-    }
-
     @media (max-width: 780px) {
       main {
         width: min(100vw - 22px, 560px);
@@ -471,7 +466,7 @@
 
           <div class="actions">
             <button id="generateButton" type="submit">Generate</button>
-            <div class="small-note">The Pi API uses HTTPS on port 443.</div>
+            <div class="small-note">The Pi API uses HTTP on port 80.</div>
           </div>
         </div>
       </form>
@@ -578,7 +573,7 @@
 
     function buildRequestUrl() {
       const host = normalizeHost(field("piHost").value);
-      const url = new URL(`https://${host}/geiger`);
+      const url = new URL(`http://${host}/geiger`);
       const params = url.searchParams;
       params.set("pwd", field("password").value.trim());
       params.set("s", field("seconds").value);
@@ -644,11 +639,6 @@
       showMessage("Result received.", "success");
     }
 
-    function tlsHelp(url) {
-      const certUrl = new URL("/", url.origin);
-      return `Browser blocked the request. If the Pi certificate has not been accepted on this computer, open <a class="cert-link" href="${certUrl.href}" target="_blank" rel="noreferrer">this Pi HTTPS URL</a>, accept the certificate warning, then run the count again.`;
-    }
-
     restoreConnectionDetails();
     field("piHost").addEventListener("input", saveConnectionDetails);
     field("password").addEventListener("input", saveConnectionDetails);
@@ -698,7 +688,7 @@
         stopCountdown(seconds);
         statusChip.textContent = "Error";
         if (String(error.message).includes("Failed to fetch") || error.name === "TypeError") {
-          showMessage(tlsHelp(url), "error");
+          showMessage("Browser could not reach the Pi API. Check the Pi IP, port 80 service status, and that this page is opened from a local file or an HTTP page.", "error");
         } else if (error.message === "unauthorized") {
           showMessage("Password rejected by the Pi.", "error");
         } else if (error.message === "busy") {

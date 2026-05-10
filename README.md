@@ -1,6 +1,6 @@
 # Raspberry Pi Geiger Counter
 
-Minimal Geiger counter for Raspberry Pi OS Lite. It can run as a command-line tool or as a tiny built-in HTTPS JSON API without installing a GUI, desktop environment, browser, database, nginx, Apache, or a Python web framework.
+Minimal Geiger counter for Raspberry Pi OS Lite. It can run as a command-line tool or as a tiny built-in HTTP JSON API without installing a GUI, desktop environment, browser, database, nginx, Apache, or a Python web framework.
 
 The default command is:
 
@@ -22,7 +22,7 @@ When running in an interactive terminal, the app also shows a small counting-dot
 - Uses active-low pulses by default, with the internal pull-up enabled.
 - Accepts the shorthand `-10` to mean "count for 10 seconds".
 - Prints raw impulses, CPS, and CPM.
-- Can expose the same counting options through `https://<pi-ip>/geiger`.
+- Can expose the same counting options through `http://<pi-ip>/geiger`.
 - Includes simulation mode for development on non-Raspberry Pi computers.
 
 The default input settings are near the top of `app.py`:
@@ -103,10 +103,7 @@ The installer installs only:
 
 ```text
 python3-rpi.gpio
-openssl
 ```
-
-`openssl` is used by the installer to create a local self-signed TLS certificate for the HTTPS API.
 
 The previous GUI packages are no longer installed:
 
@@ -139,12 +136,10 @@ It creates this command:
 /usr/local/bin/geiger.sh
 ```
 
-It also creates local-only HTTPS API files:
+It also creates a local-only HTTP API password file:
 
 ```text
 ~/geiger-app/password.txt
-~/geiger-app/server.crt
-~/geiger-app/server.key
 ```
 
 These files are generated on the Raspberry Pi and should not be committed to Git.
@@ -226,9 +221,9 @@ Show all options:
 geiger.sh --help
 ```
 
-## Run The HTTPS API
+## Run The HTTP API
 
-The installer creates a lightweight systemd service that listens on port 443 when started:
+The installer creates a lightweight systemd service that listens on port 80 when started:
 
 ```sh
 sudo systemctl enable --now geiger-web.service
@@ -240,13 +235,11 @@ Read the generated 10-character password:
 cat ~/geiger-app/password.txt
 ```
 
-Then call the Raspberry Pi over HTTPS:
+Then call the Raspberry Pi over HTTP:
 
 ```sh
-curl -k "https://192.168.0.1/geiger?pwd=XXXXXXXXXX&s=10&pin=17"
+curl "http://192.168.0.1/geiger?pwd=XXXXXXXXXX&s=10&pin=17"
 ```
-
-The certificate is self-signed, so `curl -k` is expected unless you replace `~/geiger-app/server.crt` and `~/geiger-app/server.key` with a certificate trusted by your client.
 
 The response is JSON:
 
@@ -269,13 +262,11 @@ poll-interval-ms=1
 simulate=1
 ```
 
-To run the HTTPS API manually instead of through systemd:
+To run the HTTP API manually instead of through systemd:
 
 ```sh
 sudo geiger.sh --serve \
-  --password-file ~/geiger-app/password.txt \
-  --cert-file ~/geiger-app/server.crt \
-  --tls-key-file ~/geiger-app/server.key
+  --password-file ~/geiger-app/password.txt
 ```
 
 ## Browser Control Page
@@ -287,8 +278,6 @@ web/index.html
 ```
 
 You can open that file on another computer. It asks for the Raspberry Pi IP or host, password, seconds, and optional GPIO settings. The page stores the Pi host and password in that browser's local storage so you do not need to re-enter them every time.
-
-Because the API certificate is self-signed, browsers may block the page's request until the certificate is accepted or trusted on that computer. If that happens, open `https://<raspberry-pi-ip>/` in the same browser, accept the certificate warning, then return to `web/index.html` and run the count again.
 
 ## Troubleshooting
 

@@ -6,7 +6,6 @@ import hmac
 import json
 import os
 import random
-import ssl
 import sys
 import threading
 import time
@@ -21,18 +20,14 @@ DEFAULT_ACTIVE_STATE = "low"
 DEFAULT_BOUNCE_MS = 25
 DEFAULT_POLL_INTERVAL_MS = 1.0
 DEFAULT_WEB_HOST = "0.0.0.0"
-DEFAULT_WEB_PORT = 443
+DEFAULT_WEB_PORT = 80
 PASSWORD_LENGTH = 10
 
 SIMULATION_ENV = "GEIGER_SIMULATE"
 PASSWORD_FILE_ENV = "GEIGER_PASSWORD_FILE"
-TLS_CERT_FILE_ENV = "GEIGER_TLS_CERT_FILE"
-TLS_KEY_FILE_ENV = "GEIGER_TLS_KEY_FILE"
 
 APP_DIR = os.path.dirname(os.path.abspath(__file__))
 DEFAULT_PASSWORD_FILE = os.path.join(APP_DIR, "password.txt")
-DEFAULT_TLS_CERT_FILE = os.path.join(APP_DIR, "server.crt")
-DEFAULT_TLS_KEY_FILE = os.path.join(APP_DIR, "server.key")
 
 
 class PulseCounter:
@@ -339,35 +334,25 @@ def parse_args(argv):
     parser.add_argument(
         "--serve",
         action="store_true",
-        help="run the lightweight HTTPS JSON API instead of one terminal count",
+        help="run the lightweight HTTP JSON API instead of one terminal count",
     )
     parser.add_argument(
         "--host",
         default=DEFAULT_WEB_HOST,
-        help=f"HTTPS API bind address; default is {DEFAULT_WEB_HOST}",
+        help=f"HTTP API bind address; default is {DEFAULT_WEB_HOST}",
     )
     parser.add_argument(
         "--port",
         type=parse_port,
         default=DEFAULT_WEB_PORT,
-        help=f"HTTPS API port; default is {DEFAULT_WEB_PORT}",
+        help=f"HTTP API port; default is {DEFAULT_WEB_PORT}",
     )
     parser.add_argument(
         "--password-file",
         "--pwd-file",
         dest="password_file",
         default=os.environ.get(PASSWORD_FILE_ENV, DEFAULT_PASSWORD_FILE),
-        help=f"file containing the {PASSWORD_LENGTH} character HTTPS password",
-    )
-    parser.add_argument(
-        "--cert-file",
-        default=os.environ.get(TLS_CERT_FILE_ENV, DEFAULT_TLS_CERT_FILE),
-        help="TLS certificate file for the HTTPS API",
-    )
-    parser.add_argument(
-        "--tls-key-file",
-        default=os.environ.get(TLS_KEY_FILE_ENV, DEFAULT_TLS_KEY_FILE),
-        help="TLS private key file for the HTTPS API",
+        help=f"file containing the {PASSWORD_LENGTH} character HTTP password",
     )
     return parser.parse_args(argv)
 
@@ -659,16 +644,8 @@ def run_web_service(args):
     server.base_args = args
     server.count_lock = threading.Lock()
 
-    context = ssl.SSLContext(ssl.PROTOCOL_TLS_SERVER)
-    try:
-        context.load_cert_chain(certfile=args.cert_file, keyfile=args.tls_key_file)
-        server.socket = context.wrap_socket(server.socket, server_side=True)
-    except (OSError, ssl.SSLError) as exc:
-        server.server_close()
-        raise RuntimeError(f"cannot start HTTPS server: {exc}") from exc
-
     print(
-        f"geiger: HTTPS API listening on https://{args.host}:{args.port}/geiger",
+        f"geiger: HTTP API listening on http://{args.host}:{args.port}/geiger",
         file=sys.stderr,
     )
     try:
