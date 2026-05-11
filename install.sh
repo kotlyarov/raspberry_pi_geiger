@@ -14,6 +14,74 @@ APT_PACKAGES_REQUIRED="
 python3-rpi.gpio
 "
 
+physical_dir() {
+    cd "$1" && pwd -P
+}
+
+cleanup_previous_install() {
+    echo "Cleaning previous Geiger install..."
+
+    if command -v systemctl >/dev/null 2>&1; then
+        echo "Stopping and disabling previous service if present..."
+        sudo systemctl stop "$SERVICE_NAME" >/dev/null 2>&1 || true
+        sudo systemctl disable "$SERVICE_NAME" >/dev/null 2>&1 || true
+
+        if [ -f "$SERVICE_PATH" ]; then
+            echo "Removing previous service file: $SERVICE_PATH"
+            sudo rm -f "$SERVICE_PATH"
+        fi
+
+        if [ -d "$SERVICE_PATH.d" ]; then
+            echo "Removing previous service drop-ins: $SERVICE_PATH.d"
+            sudo rm -rf "$SERVICE_PATH.d"
+        fi
+
+        sudo systemctl daemon-reload
+        sudo systemctl reset-failed "$SERVICE_NAME" >/dev/null 2>&1 || true
+    fi
+
+    if [ -e "$BIN_PATH" ] || [ -L "$BIN_PATH" ]; then
+        echo "Removing previous command: $BIN_PATH"
+        sudo rm -f "$BIN_PATH"
+    fi
+
+    if [ -d "$INSTALL_DIR" ]; then
+        source_real=$(physical_dir "$SOURCE_DIR")
+        install_real=$(physical_dir "$INSTALL_DIR")
+
+        if [ "$source_real" = "$install_real" ]; then
+            echo "Refusing to remove $INSTALL_DIR because it is the source directory." >&2
+            echo "Run install.sh from the cloned repository, not from $INSTALL_DIR." >&2
+            exit 1
+        fi
+
+        echo "Removing previous app directory: $INSTALL_DIR"
+        sudo rm -rf "$INSTALL_DIR"
+    fi
+}
+
+pi_ip_addresses() {
+    if command -v hostname >/dev/null 2>&1; then
+        ip_addresses=$(hostname -I 2>/dev/null | tr -s ' ' | sed 's/^ //; s/ $//')
+        if [ -n "$ip_addresses" ]; then
+            printf '%s\n' "$ip_addresses"
+            return
+        fi
+    fi
+
+    if command -v ip >/dev/null 2>&1; then
+        ip_addresses=$(ip -o -4 addr show scope global 2>/dev/null |
+            awk '{ split($4, address, "/"); printf "%s%s", separator, address[1]; separator = " " }'
+        )
+        if [ -n "$ip_addresses" ]; then
+            printf '%s\n' "$ip_addresses"
+            return
+        fi
+    fi
+
+    return 0
+}
+
 if [ ! -f "$SOURCE_DIR/app.py" ]; then
     echo "Cannot find app.py in $SOURCE_DIR" >&2
     exit 1
@@ -32,6 +100,8 @@ case "$(uname -m)" in
         echo "Continuing anyway; use --simulate for off-device testing." >&2
         ;;
 esac
+
+cleanup_previous_install
 
 echo "Installing minimal GPIO runtime..."
 sudo apt update
@@ -94,15 +164,28 @@ EOF
     rm -f "$service_tmp"
     sudo chmod 644 "$SERVICE_PATH"
     sudo systemctl daemon-reload
+    if ! sudo systemctl enable --now "$SERVICE_NAME"; then
+        echo "Failed to enable and start $SERVICE_NAME." >&2
+        sudo systemctl status "$SERVICE_NAME" --no-pager -l || true
+        exit 1
+    fi
 else
-    echo "systemctl not found; skipping systemd service installation." >&2
+    echo "systemctl not found; cannot install the boot-time HTTP service." >&2
+    exit 1
+fi
+
+ip_addresses=$(pi_ip_addresses)
+if [ -z "$ip_addresses" ]; then
+    ip_addresses="unknown"
 fi
 
 echo
 echo "Installed Geiger Counter CLI and HTTP API."
 echo "Run it with: geiger.sh -10"
-echo "Start HTTP API with: sudo systemctl enable --now $SERVICE_NAME"
+echo "HTTP API service: $SERVICE_NAME is enabled and started"
+echo "Pi IP address(es): $ip_addresses"
 echo "Password file: $PASSWORD_PATH"
-echo "HTTP request: http://<raspberry-pi-ip>/geiger?pwd=<password>&s=10&pin=17"
+echo "Password for ?pwd=: $password"
+echo "HTTP request: http://<raspberry-pi-ip>/geiger?pwd=$password&s=10&pin=17"
 echo "For non-Raspberry Pi testing: geiger.sh -10 --simulate"
 echo "To update later: cd $SOURCE_DIR && git pull && ./install.sh"

@@ -97,6 +97,11 @@ chmod +x install.sh
 ./install.sh
 ```
 
+The installer removes any previous `geiger-web.service`, `~/geiger-app`, and
+`/usr/local/bin/geiger.sh` install before copying fresh files. It then enables
+and starts the HTTP API service automatically, so it will come back after the Pi
+boots. At the end it prints the Pi IP address and the generated `?pwd=` value.
+
 ## Minimal Runtime Packages
 
 The installer installs only:
@@ -136,7 +141,7 @@ It creates this command:
 /usr/local/bin/geiger.sh
 ```
 
-It also creates a local-only HTTP API password file:
+It also creates a fresh local-only HTTP API password file:
 
 ```text
 ~/geiger-app/password.txt
@@ -223,11 +228,8 @@ geiger.sh --help
 
 ## Run The HTTP API
 
-The installer creates a lightweight systemd service that listens on port 80 when started:
-
-```sh
-sudo systemctl enable --now geiger-web.service
-```
+The installer creates, enables, and starts a lightweight systemd service that
+listens on port 80.
 
 Read the generated 10-character password:
 
