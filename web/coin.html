@@ -87,7 +87,15 @@
       letter-spacing: 0;
     }
 
+    .top-actions {
+      display: flex;
+      align-items: center;
+      justify-content: end;
+      gap: 10px;
+    }
+
     .settings-button,
+    .help-button,
     .close-button,
     .done-button {
       min-height: 42px;
@@ -97,6 +105,24 @@
       color: #ffffff;
       padding: 0 16px;
       font-weight: 780;
+    }
+
+    .help-button {
+      width: 42px;
+      border: 1px solid var(--line);
+      border-radius: 50%;
+      background: rgba(255, 255, 255, 0.82);
+      color: var(--accent);
+      padding: 0;
+      font-size: 1.08rem;
+      font-weight: 850;
+    }
+
+    .help-button:hover,
+    .help-button:focus-visible {
+      border-color: rgba(15, 118, 110, 0.5);
+      background: #edf6f5;
+      outline: none;
     }
 
     .settings-button:hover,
@@ -241,13 +267,13 @@
       z-index: 30;
       top: 0;
       bottom: 0;
-      left: 0;
+      right: 0;
       width: min(410px, calc(100vw - 28px));
       overflow-y: auto;
-      border-right: 1px solid var(--line);
+      border-left: 1px solid var(--line);
       background: var(--panel);
       box-shadow: var(--shadow);
-      transform: translateX(-105%);
+      transform: translateX(105%);
       transition: transform 180ms ease;
     }
 
@@ -354,6 +380,40 @@
       width: 100%;
     }
 
+    .help-dialog {
+      width: min(430px, calc(100vw - 32px));
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      background: var(--panel);
+      color: var(--ink);
+      box-shadow: var(--shadow);
+      padding: 0;
+    }
+
+    .help-dialog::backdrop {
+      background: rgba(16, 28, 32, 0.36);
+    }
+
+    .help-inner {
+      display: grid;
+      gap: 16px;
+      padding: 22px;
+    }
+
+    .help-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 14px;
+    }
+
+    .help-dialog p {
+      margin: 0;
+      color: var(--muted);
+      font-size: 1rem;
+      line-height: 1.48;
+    }
+
     @keyframes idle-spin {
       from {
         transform: rotateY(0deg);
@@ -402,6 +462,10 @@
         order: 2;
       }
 
+      .top-actions {
+        order: 2;
+      }
+
       h1 {
         grid-column: 1 / -1;
         order: 3;
@@ -436,7 +500,10 @@
     <header class="topbar">
       <a class="home-link" href="./index.html">Index</a>
       <h1>Coin Toss</h1>
-      <button class="settings-button" id="settingsButton" type="button" aria-controls="settingsDrawer" aria-expanded="false">Settings</button>
+      <div class="top-actions">
+        <button class="help-button" id="helpButton" type="button" aria-label="How the toss works" title="How the toss works">?</button>
+        <button class="settings-button" id="settingsButton" type="button" aria-controls="settingsDrawer" aria-expanded="false">Settings</button>
+      </div>
     </header>
 
     <section class="coin-stage" aria-live="polite">
@@ -523,8 +590,21 @@
     </div>
   </aside>
 
+  <dialog class="help-dialog" id="helpDialog" aria-labelledby="helpTitle">
+    <div class="help-inner">
+      <div class="help-header">
+        <h2 id="helpTitle">How it works</h2>
+        <button class="close-button" id="closeHelpButton" type="button" aria-label="Close help">x</button>
+      </div>
+      <p>The toss is powered by impulses counted from the real Geiger counter. After the count finishes, an odd number of impulses lands on A, and an even number lands on B.</p>
+    </div>
+  </dialog>
+
   <script>
     const form = document.getElementById("geigerForm");
+    const helpButton = document.getElementById("helpButton");
+    const helpDialog = document.getElementById("helpDialog");
+    const closeHelpButton = document.getElementById("closeHelpButton");
     const settingsButton = document.getElementById("settingsButton");
     const closeSettingsButton = document.getElementById("closeSettingsButton");
     const doneSettingsButton = document.getElementById("doneSettingsButton");
@@ -590,6 +670,19 @@
       settingsButton.setAttribute("aria-expanded", "false");
       drawerBackdrop.hidden = true;
       settingsButton.focus();
+    }
+
+    function openHelp() {
+      if (typeof helpDialog.showModal === "function") {
+        helpDialog.showModal();
+      } else {
+        helpDialog.setAttribute("open", "");
+      }
+    }
+
+    function closeHelp() {
+      helpDialog.close();
+      helpButton.focus();
     }
 
     function setResult(text, type = "") {
@@ -702,6 +795,8 @@
 
     field("piHost").addEventListener("input", saveConnectionDetails);
     field("password").addEventListener("input", saveConnectionDetails);
+    helpButton.addEventListener("click", openHelp);
+    closeHelpButton.addEventListener("click", closeHelp);
     settingsButton.addEventListener("click", openSettings);
     closeSettingsButton.addEventListener("click", closeSettings);
     doneSettingsButton.addEventListener("click", closeSettings);
