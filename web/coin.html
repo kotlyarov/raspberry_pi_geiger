@@ -1,0 +1,707 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Geiger Control</title>
+  <link rel="icon" href="data:,">
+  <style>
+    :root {
+      color-scheme: light;
+      --bg: #f5f7f8;
+      --panel: #ffffff;
+      --ink: #172027;
+      --muted: #5c6770;
+      --line: #d9e0e4;
+      --field: #fbfcfd;
+      --accent: #0f766e;
+      --accent-strong: #0b5f59;
+      --blue: #1d4ed8;
+      --warn: #9f580a;
+      --danger: #b42318;
+      --good: #147444;
+      --shadow: 0 16px 42px rgba(19, 31, 36, 0.09);
+    }
+
+    * {
+      box-sizing: border-box;
+    }
+
+    body {
+      margin: 0;
+      min-height: 100vh;
+      font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      color: var(--ink);
+      background:
+        linear-gradient(180deg, rgba(15, 118, 110, 0.08), rgba(245, 247, 248, 0) 340px),
+        var(--bg);
+    }
+
+    main {
+      width: min(980px, calc(100vw - 32px));
+      margin: 0 auto;
+      padding: 32px 0 48px;
+    }
+
+    header {
+      display: flex;
+      align-items: end;
+      justify-content: space-between;
+      gap: 20px;
+      margin-bottom: 20px;
+    }
+
+    h1 {
+      margin: 0;
+      font-size: clamp(2rem, 5vw, 4.6rem);
+      line-height: 0.96;
+      font-weight: 780;
+      letter-spacing: 0;
+    }
+
+    .status-chip {
+      display: inline-flex;
+      align-items: center;
+      min-height: 34px;
+      padding: 0 12px;
+      border: 1px solid var(--line);
+      border-radius: 6px;
+      background: rgba(255, 255, 255, 0.78);
+      color: var(--muted);
+      font-size: 0.88rem;
+      white-space: nowrap;
+    }
+
+    .layout {
+      display: grid;
+      grid-template-columns: minmax(0, 390px) minmax(0, 1fr);
+      gap: 18px;
+      align-items: start;
+    }
+
+    form,
+    .results-panel {
+      background: var(--panel);
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      box-shadow: var(--shadow);
+    }
+
+    form {
+      padding: 18px;
+    }
+
+    .grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 14px;
+    }
+
+    .field {
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+    }
+
+    .span-2 {
+      grid-column: span 2;
+    }
+
+    label,
+    summary {
+      color: #2d3a42;
+      font-size: 0.86rem;
+      font-weight: 650;
+    }
+
+    input,
+    select {
+      width: 100%;
+      min-height: 42px;
+      border: 1px solid #c8d2d8;
+      border-radius: 6px;
+      background: var(--field);
+      color: var(--ink);
+      padding: 0 11px;
+      font: inherit;
+      outline: none;
+    }
+
+    input:focus,
+    select:focus {
+      border-color: var(--accent);
+      box-shadow: 0 0 0 3px rgba(15, 118, 110, 0.15);
+    }
+
+    input[type="checkbox"] {
+      width: 18px;
+      height: 18px;
+      min-height: 0;
+      accent-color: var(--accent);
+    }
+
+    .checkbox-row {
+      min-height: 42px;
+      display: flex;
+      align-items: center;
+      gap: 9px;
+      padding-top: 20px;
+    }
+
+    details {
+      grid-column: span 2;
+      margin-top: 4px;
+      border-top: 1px solid var(--line);
+      padding-top: 12px;
+    }
+
+    summary {
+      cursor: pointer;
+      list-style-position: outside;
+    }
+
+    details .grid {
+      margin-top: 14px;
+    }
+
+    .actions {
+      grid-column: span 2;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+      margin-top: 4px;
+    }
+
+    button {
+      min-height: 44px;
+      border: 0;
+      border-radius: 6px;
+      background: var(--accent);
+      color: white;
+      padding: 0 18px;
+      font: inherit;
+      font-weight: 760;
+      cursor: pointer;
+    }
+
+    button:hover {
+      background: var(--accent-strong);
+    }
+
+    button:disabled {
+      cursor: wait;
+      background: #7b8b8a;
+    }
+
+    .small-note {
+      color: var(--muted);
+      font-size: 0.8rem;
+      line-height: 1.35;
+      text-align: right;
+    }
+
+    .results-panel {
+      min-height: 440px;
+      padding: 22px;
+      display: flex;
+      flex-direction: column;
+      gap: 18px;
+    }
+
+    .envelope {
+      display: none;
+      margin: 0;
+      color: var(--blue);
+      font-size: clamp(2.25rem, 7vw, 5.8rem);
+      line-height: 0.95;
+      letter-spacing: 0;
+      font-weight: 840;
+    }
+
+    .envelope.show {
+      display: block;
+    }
+
+    .countdown-box {
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      padding: 16px;
+      background: #f7faf9;
+    }
+
+    .countdown-top {
+      display: flex;
+      align-items: baseline;
+      justify-content: space-between;
+      gap: 12px;
+      margin-bottom: 12px;
+    }
+
+    .countdown-label {
+      color: var(--muted);
+      font-size: 0.83rem;
+      font-weight: 700;
+      text-transform: uppercase;
+    }
+
+    .countdown-value {
+      font-variant-numeric: tabular-nums;
+      font-size: 2rem;
+      font-weight: 780;
+    }
+
+    .progress-track {
+      height: 12px;
+      overflow: hidden;
+      border-radius: 999px;
+      background: #dce7e5;
+    }
+
+    .progress-bar {
+      width: 0%;
+      height: 100%;
+      background: linear-gradient(90deg, var(--accent), #2563eb);
+      transition: width 120ms linear;
+    }
+
+    .metric-grid {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 12px;
+    }
+
+    .metric {
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      padding: 14px;
+      background: #ffffff;
+    }
+
+    .metric-label {
+      color: var(--muted);
+      font-size: 0.78rem;
+      font-weight: 700;
+      text-transform: uppercase;
+    }
+
+    .metric-value {
+      margin-top: 6px;
+      font-size: clamp(1.55rem, 4vw, 2.35rem);
+      line-height: 1;
+      font-weight: 800;
+      font-variant-numeric: tabular-nums;
+      overflow-wrap: anywhere;
+    }
+
+    .meta {
+      display: grid;
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+      gap: 8px;
+      color: var(--muted);
+      font-size: 0.84rem;
+    }
+
+    .meta span {
+      min-height: 34px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      border: 1px solid var(--line);
+      border-radius: 6px;
+      background: #fbfcfd;
+      text-align: center;
+      overflow-wrap: anywhere;
+    }
+
+    .message {
+      display: none;
+      border-radius: 8px;
+      border: 1px solid var(--line);
+      padding: 13px 14px;
+      color: var(--muted);
+      background: #fbfcfd;
+      line-height: 1.42;
+    }
+
+    .message.show {
+      display: block;
+    }
+
+    .message.error {
+      color: var(--danger);
+      border-color: #f2b8b5;
+      background: #fff7f6;
+    }
+
+    .message.warning {
+      color: var(--warn);
+      border-color: #f3d09b;
+      background: #fffaf2;
+    }
+
+    .message.success {
+      color: var(--good);
+      border-color: #a6d8bd;
+      background: #f3fbf6;
+    }
+
+    @media (max-width: 780px) {
+      main {
+        width: min(100vw - 22px, 560px);
+        padding-top: 20px;
+      }
+
+      header,
+      .layout {
+        display: block;
+      }
+
+      h1 {
+        margin-bottom: 12px;
+      }
+
+      .status-chip {
+        margin-bottom: 14px;
+      }
+
+      .results-panel {
+        margin-top: 14px;
+        min-height: 0;
+      }
+
+      .grid,
+      details .grid,
+      .metric-grid,
+      .meta {
+        grid-template-columns: 1fr;
+      }
+
+      .span-2,
+      details,
+      .actions {
+        grid-column: auto;
+      }
+
+      .actions {
+        align-items: stretch;
+        flex-direction: column;
+      }
+
+      button {
+        width: 100%;
+      }
+
+      .small-note {
+        text-align: left;
+      }
+    }
+  </style>
+</head>
+<body>
+  <main>
+    <header>
+      <h1>Geiger Control</h1>
+      <div class="status-chip" id="statusChip">Ready</div>
+    </header>
+
+    <div class="layout">
+      <form id="geigerForm">
+        <div class="grid">
+          <div class="field span-2">
+            <label for="piHost">Pi IP or host</label>
+            <input id="piHost" name="piHost" type="text" inputmode="url" autocomplete="off" placeholder="192.168.2.9" required>
+          </div>
+
+          <div class="field span-2">
+            <label for="password">Password</label>
+            <input id="password" name="password" type="password" maxlength="10" autocomplete="off" required>
+          </div>
+
+          <div class="field">
+            <label for="seconds">Seconds</label>
+            <input id="seconds" name="seconds" type="number" min="0.1" step="0.1" value="10" required>
+          </div>
+
+          <div class="field">
+            <label for="pin">GPIO pin</label>
+            <input id="pin" name="pin" type="number" min="0" step="1" value="17">
+          </div>
+
+          <details>
+            <summary>Advanced options</summary>
+            <div class="grid">
+              <div class="field">
+                <label for="pull">Pull resistor</label>
+                <select id="pull" name="pull">
+                  <option value="up" selected>up</option>
+                  <option value="down">down</option>
+                  <option value="off">off</option>
+                </select>
+              </div>
+
+              <div class="field">
+                <label for="active">Active state</label>
+                <select id="active" name="active">
+                  <option value="low">low</option>
+                  <option value="high" selected>high</option>
+                </select>
+              </div>
+
+              <div class="field">
+                <label for="bounceMs">Bounce ms</label>
+                <input id="bounceMs" name="bounceMs" type="number" min="0" step="1" value="0">
+              </div>
+
+              <div class="field">
+                <label for="pollIntervalMs">Poll interval ms</label>
+                <input id="pollIntervalMs" name="pollIntervalMs" type="number" min="0.1" step="0.1" value="0.1">
+              </div>
+
+              <label class="checkbox-row" for="simulate">
+                <input id="simulate" name="simulate" type="checkbox">
+                Simulate
+              </label>
+            </div>
+          </details>
+
+          <div class="actions">
+            <button id="generateButton" type="submit">Generate</button>
+            <div class="small-note">The Pi API uses HTTP on port 80.</div>
+          </div>
+        </div>
+      </form>
+
+      <section class="results-panel" aria-live="polite">
+        <h2 class="envelope" id="envelopeHeader"></h2>
+
+        <div class="countdown-box">
+          <div class="countdown-top">
+            <div class="countdown-label">Countdown</div>
+            <div class="countdown-value" id="countdownValue">10.0s</div>
+          </div>
+          <div class="progress-track">
+            <div class="progress-bar" id="progressBar"></div>
+          </div>
+        </div>
+
+        <div class="message show" id="messageBox">Enter the Pi details and start a count.</div>
+
+        <div class="metric-grid" id="metrics" hidden>
+          <div class="metric">
+            <div class="metric-label">Impulses</div>
+            <div class="metric-value" id="impulsesValue">0</div>
+          </div>
+          <div class="metric">
+            <div class="metric-label">CPM</div>
+            <div class="metric-value" id="cpmValue">0.0</div>
+          </div>
+          <div class="metric">
+            <div class="metric-label">CPS</div>
+            <div class="metric-value" id="cpsValue">0.000</div>
+          </div>
+          <div class="metric">
+            <div class="metric-label">Seconds</div>
+            <div class="metric-value" id="secondsValue">10</div>
+          </div>
+        </div>
+
+        <div class="meta" id="meta" hidden>
+          <span id="pinMeta">pin 17</span>
+          <span id="pullMeta">pull up</span>
+          <span id="activeMeta">active low</span>
+        </div>
+      </section>
+    </div>
+  </main>
+
+  <script>
+    const form = document.getElementById("geigerForm");
+    const statusChip = document.getElementById("statusChip");
+    const generateButton = document.getElementById("generateButton");
+    const countdownValue = document.getElementById("countdownValue");
+    const progressBar = document.getElementById("progressBar");
+    const messageBox = document.getElementById("messageBox");
+    const envelopeHeader = document.getElementById("envelopeHeader");
+    const metrics = document.getElementById("metrics");
+    const meta = document.getElementById("meta");
+    const field = (id) => document.getElementById(id);
+    const savedHostKey = "geiger.piHost";
+    const savedPasswordKey = "geiger.password";
+    let countdownTimer = null;
+
+    function loadStoredValue(key) {
+      try {
+        return localStorage.getItem(key) || "";
+      } catch (error) {
+        return "";
+      }
+    }
+
+    function storeValue(key, value) {
+      try {
+        localStorage.setItem(key, value);
+      } catch (error) {
+        // Some locked-down browser modes disable localStorage for local files.
+      }
+    }
+
+    function restoreConnectionDetails() {
+      const savedHost = loadStoredValue(savedHostKey);
+      const savedPassword = loadStoredValue(savedPasswordKey);
+      if (savedHost) {
+        field("piHost").value = savedHost;
+      }
+      if (savedPassword) {
+        field("password").value = savedPassword;
+      }
+      if (savedHost || savedPassword) {
+        statusChip.textContent = "Saved";
+      }
+    }
+
+    function saveConnectionDetails() {
+      storeValue(savedHostKey, normalizeHost(field("piHost").value));
+      storeValue(savedPasswordKey, field("password").value.trim());
+    }
+
+    function normalizeHost(value) {
+      return value
+        .trim()
+        .replace(/^https?:\/\//i, "")
+        .replace(/\/.*$/, "");
+    }
+
+    function buildRequestUrl() {
+      const host = normalizeHost(field("piHost").value);
+      const url = new URL(`http://${host}/geiger`);
+      const params = url.searchParams;
+      params.set("pwd", field("password").value.trim());
+      params.set("s", field("seconds").value);
+      params.set("pin", field("pin").value);
+      params.set("pull", field("pull").value);
+      params.set("active", field("active").value);
+      params.set("bounce-ms", field("bounceMs").value);
+      params.set("poll-interval-ms", field("pollIntervalMs").value);
+      if (field("simulate").checked) {
+        params.set("simulate", "1");
+      }
+      return url;
+    }
+
+    function showMessage(text, type = "") {
+      messageBox.className = `message show${type ? ` ${type}` : ""}`;
+      messageBox.innerHTML = text;
+    }
+
+    function clearResults() {
+      envelopeHeader.classList.remove("show");
+      envelopeHeader.textContent = "";
+      metrics.hidden = true;
+      meta.hidden = true;
+    }
+
+    function updateCountdown(seconds, startedAt) {
+      const elapsed = (Date.now() - startedAt) / 1000;
+      const remaining = Math.max(seconds - elapsed, 0);
+      const percent = Math.min((elapsed / seconds) * 100, 100);
+      countdownValue.textContent = `${remaining.toFixed(1)}s`;
+      progressBar.style.width = `${percent}%`;
+    }
+
+    function startCountdown(seconds) {
+      clearInterval(countdownTimer);
+      const startedAt = Date.now();
+      updateCountdown(seconds, startedAt);
+      countdownTimer = setInterval(() => updateCountdown(seconds, startedAt), 100);
+    }
+
+    function stopCountdown(seconds) {
+      clearInterval(countdownTimer);
+      countdownValue.textContent = "0.0s";
+      progressBar.style.width = seconds > 0 ? "100%" : "0%";
+    }
+
+    function displayResults(result) {
+      const impulses = Number(result.impulses);
+      envelopeHeader.textContent = impulses % 2 === 1 ? "Open Envelope A" : "Open Envelope B";
+      envelopeHeader.classList.add("show");
+
+      field("impulsesValue").textContent = result.impulses;
+      field("cpmValue").textContent = Number(result.cpm).toFixed(1);
+      field("cpsValue").textContent = Number(result.cps).toFixed(3);
+      field("secondsValue").textContent = result.seconds;
+      field("pinMeta").textContent = `pin ${result.pin}`;
+      field("pullMeta").textContent = `pull ${result.pull}`;
+      field("activeMeta").textContent = `active ${result.active_state}`;
+
+      metrics.hidden = false;
+      meta.hidden = false;
+      showMessage("Result received.", "success");
+    }
+
+    restoreConnectionDetails();
+    field("piHost").addEventListener("input", saveConnectionDetails);
+    field("password").addEventListener("input", saveConnectionDetails);
+
+    form.addEventListener("submit", async (event) => {
+      event.preventDefault();
+
+      let url;
+      try {
+        saveConnectionDetails();
+        url = buildRequestUrl();
+      } catch (error) {
+        showMessage("Check the Pi IP or host value.", "error");
+        return;
+      }
+
+      const seconds = Number(field("seconds").value);
+      if (!Number.isFinite(seconds) || seconds <= 0) {
+        showMessage("Seconds must be greater than zero.", "error");
+        return;
+      }
+
+      clearResults();
+      statusChip.textContent = "Counting";
+      generateButton.disabled = true;
+      generateButton.textContent = "Counting...";
+      showMessage("Waiting for the Pi response.", "warning");
+      startCountdown(seconds);
+
+      try {
+        const response = await fetch(url.href, {
+          method: "GET",
+          cache: "no-store",
+          mode: "cors"
+        });
+
+        const data = await response.json().catch(() => null);
+        if (!response.ok) {
+          const detail = data && data.error ? data.error : `HTTP ${response.status}`;
+          throw new Error(detail);
+        }
+
+        stopCountdown(seconds);
+        displayResults(data);
+        statusChip.textContent = "Ready";
+      } catch (error) {
+        stopCountdown(seconds);
+        statusChip.textContent = "Error";
+        if (String(error.message).includes("Failed to fetch") || error.name === "TypeError") {
+          showMessage("Browser could not reach the Pi API. Check the Pi IP, port 80 service status, and that this page is opened from a local file or an HTTP page.", "error");
+        } else if (error.message === "unauthorized") {
+          showMessage("Password rejected by the Pi.", "error");
+        } else if (error.message === "busy") {
+          showMessage("The Pi is already counting. Try again when the current count finishes.", "warning");
+        } else {
+          showMessage(`Request failed: ${error.message}`, "error");
+        }
+      } finally {
+        generateButton.disabled = false;
+        generateButton.textContent = "Generate";
+      }
+    });
+  </script>
+</body>
+</html>

@@ -271,15 +271,17 @@ sudo geiger.sh --serve \
   --password-file ~/geiger-app/password.txt
 ```
 
-## Browser Control Page
+## Browser Pages
 
-The repository includes a standalone browser page:
+The repository includes standalone browser pages:
 
 ```text
 web/index.html
+web/coin.html
+web/cardguess.html
 ```
 
-You can open that file on another computer. It asks for the Raspberry Pi IP or host, password, seconds, and optional GPIO settings. The page stores the Pi host and password in that browser's local storage so you do not need to re-enter them every time.
+Open `web/index.html` on another computer to choose a page. `web/coin.html` contains the existing Raspberry Pi random-choice control page. It asks for the Raspberry Pi IP or host, password, seconds, and optional GPIO settings, and stores the Pi host and password in that browser's local storage so you do not need to re-enter them every time. `web/cardguess.html` is a CSS-only placeholder for the future card guessing interface.
 
 ## Troubleshooting
 
