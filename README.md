@@ -281,7 +281,7 @@ web/coin.html
 web/cardguess.html
 ```
 
-Open `web/index.html` on another computer to choose a page. `web/coin.html` contains the existing Raspberry Pi random-choice control page. It asks for the Raspberry Pi IP or host, password, seconds, and optional GPIO settings, and stores the Pi host and password in that browser's local storage so you do not need to re-enter them every time. `web/cardguess.html` is a CSS-only placeholder for the future card guessing interface.
+Open `web/index.html` on another computer to choose a page. `web/coin.html` contains the Raspberry Pi counter-backed coin toss interface. Its Settings menu asks for the Raspberry Pi IP or host, password, seconds, and optional GPIO settings, and stores the Pi host and password in that browser's local storage so you do not need to re-enter them every time. `web/cardguess.html` is a CSS-only placeholder for the future card guessing interface.
 
 ## Troubleshooting
 
