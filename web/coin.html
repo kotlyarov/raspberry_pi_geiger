@@ -159,7 +159,6 @@
       height: 100%;
       transform-style: preserve-3d;
       animation: idle-spin 7.5s linear infinite;
-      filter: drop-shadow(0 32px 42px rgba(84, 61, 24, 0.2));
     }
 
     .coin-button.is-counting .coin {
@@ -181,7 +180,9 @@
       place-items: center;
       border: 9px solid #c99b3f;
       border-radius: 50%;
+      -webkit-backface-visibility: hidden;
       backface-visibility: hidden;
+      transform: rotateY(0deg) translateZ(1px);
       background:
         radial-gradient(circle at 34% 27%, var(--gold-light) 0 10%, transparent 11%),
         radial-gradient(circle at 50% 52%, rgba(255, 255, 255, 0.12), transparent 40%),
@@ -191,6 +192,7 @@
       font-weight: 900;
       line-height: 1;
       box-shadow:
+        0 32px 42px rgba(84, 61, 24, 0.2),
         inset 0 0 0 12px rgba(122, 84, 25, 0.12),
         inset 0 -22px 38px rgba(93, 63, 18, 0.15);
     }
@@ -204,7 +206,7 @@
     }
 
     .coin-face-b {
-      transform: rotateY(180deg);
+      transform: rotateY(180deg) translateZ(1px);
     }
 
     .result-line {
