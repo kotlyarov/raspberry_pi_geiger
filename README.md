@@ -30,9 +30,9 @@ The default input settings are near the top of `app.py`:
 ```python
 GPIO_PIN = 17
 DEFAULT_INTERVAL_SECONDS = 10.0
-DEFAULT_PULL = "up"
-DEFAULT_ACTIVE_STATE = "low"
-DEFAULT_BOUNCE_MS = 25
+DEFAULT_PULL = "down"
+DEFAULT_ACTIVE_STATE = "up"
+DEFAULT_BOUNCE_MS = 0
 ```
 
 Software dead-time/debounce defaults to 25 ms so one noisy pulse burst is less likely to be counted as many impulses. Set `--bounce-ms 0` to disable it.
