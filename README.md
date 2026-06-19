@@ -65,15 +65,25 @@ Boot the Raspberry Pi and log in locally or by SSH.
 If Wi-Fi was not configured in Raspberry Pi Imager, run:
 
 ```sh
-sudo raspi-config
+sudo nmtui
 ```
 
-Then configure wireless LAN from the system options, reboot if needed, and log in again.
+Select `Activate a connection` or `Edit a connection`, choose your Wi-Fi
+network, enter the password, and connect. Raspberry Pi OS Bookworm uses
+NetworkManager for network connections, so use `nmtui` or `nmcli` to add or
+change the SSID/password. Do not use `raspi-config` for the Wi-Fi connection
+profile.
 
-Check that the network works:
+If the Wi-Fi radio is disabled because the WLAN country was not set, set the
+country first in Raspberry Pi Imager when flashing the card. On an already
+booted Pi, use `raspi-config` only for `Localisation Options > WLAN Country`,
+then return to `sudo nmtui` for the network connection itself.
+
+Check that the network works and NetworkManager sees the Wi-Fi networks:
 
 ```sh
 ping -c 3 raspberrypi.com
+nmcli dev wifi list
 ```
 
 Install only the tools needed to clone from GitHub:
