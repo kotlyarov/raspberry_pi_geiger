@@ -18,6 +18,7 @@
       --accent-strong: #0b5f59;
       --red: #b42318;
       --danger: #b42318;
+      --success: #12843b;
       --warn: #9f580a;
       --shadow: 0 18px 48px rgba(19, 31, 36, 0.12);
     }
@@ -252,6 +253,17 @@
       transform: translateY(-1px);
     }
 
+    .choice-button:disabled {
+      cursor: not-allowed;
+      opacity: 0.52;
+    }
+
+    .choice-button:disabled:hover {
+      border-color: var(--line);
+      background: rgba(255, 255, 255, 0.86);
+      transform: none;
+    }
+
     .choice-button:focus-visible {
       border-color: rgba(15, 118, 110, 0.55);
       outline: none;
@@ -298,15 +310,23 @@
       align-items: center;
       gap: clamp(18px, 4vw, 42px);
       width: 100%;
+      perspective: 1200px;
     }
 
     .unicode-card {
-      display: block;
+      display: grid;
+      place-items: center;
+      width: min(100%, 360px);
+      aspect-ratio: 5 / 7;
+      border: 6px solid transparent;
+      border-radius: 18px;
       color: var(--ink);
       font-family: "Apple Symbols", "Segoe UI Symbol", "Noto Sans Symbols 2", "Noto Sans Symbols", serif;
-      font-size: clamp(15.6rem, 28.8vw, 25.2rem);
-      line-height: 0.74;
+      font-size: clamp(13rem, 24vw, 21.5rem);
+      line-height: 1;
       text-shadow: 0 24px 44px rgba(19, 31, 36, 0.16);
+      transform-style: preserve-3d;
+      transition: border-color 160ms ease, box-shadow 160ms ease, opacity 160ms ease;
     }
 
     .unicode-card.red {
@@ -315,6 +335,43 @@
 
     .unicode-card.back {
       color: #4285f4;
+    }
+
+    .unicode-card.is-hidden {
+      opacity: 0;
+      visibility: hidden;
+    }
+
+    .unicode-card.is-flipping {
+      animation: card-flip 640ms cubic-bezier(0.19, 1, 0.22, 1);
+    }
+
+    .unicode-card.is-correct {
+      border-color: var(--success);
+      box-shadow: 0 0 0 5px rgba(18, 132, 59, 0.14), 0 24px 44px rgba(19, 31, 36, 0.16);
+    }
+
+    .unicode-card.is-wrong {
+      border-color: var(--danger);
+      box-shadow: 0 0 0 5px rgba(180, 35, 24, 0.14), 0 24px 44px rgba(19, 31, 36, 0.16);
+    }
+
+    @keyframes card-flip {
+      0% {
+        transform: rotateY(0deg) scale(1);
+      }
+
+      45% {
+        transform: rotateY(92deg) scale(0.96);
+      }
+
+      55% {
+        transform: rotateY(92deg) scale(0.96);
+      }
+
+      100% {
+        transform: rotateY(0deg) scale(1);
+      }
     }
 
     .draw-button {
@@ -338,8 +395,12 @@
     }
 
     .draw-button:disabled {
-      cursor: wait;
+      cursor: not-allowed;
       opacity: 0.72;
+    }
+
+    .draw-button.is-calling:disabled {
+      cursor: wait;
     }
 
     .result-line {
@@ -579,8 +640,8 @@
         <div class="result-line" id="resultLine">0/0 (0%)</div>
 
         <div class="card-pair" aria-label="Selected card pair">
-          <span class="unicode-card left-card red" aria-label="Queen of hearts">🂽</span>
-          <span class="unicode-card right-card back" aria-label="Card back">🂠</span>
+          <span class="unicode-card left-card back is-hidden" aria-label="Hidden left card">🂠</span>
+          <span class="unicode-card right-card back is-hidden" aria-label="Hidden right card">🂠</span>
         </div>
 
         <button class="draw-button" id="drawButton" type="button">DRAW PAIR</button>
@@ -696,7 +757,7 @@
         <h2 id="helpTitle">How it works</h2>
         <button class="close-button" id="closeHelpButton" type="button" aria-label="Close help">x</button>
       </div>
-      <p>Pick a rank and suit on each side to mark your guess. DRAW PAIR calls the same Geiger counter API used by the coin page; the card display is still a static interface mockup.</p>
+      <p>DRAW PAIR chooses two cards and calls the Geiger counter. The count reveals one card; name both cards to reveal the other and score the attempt.</p>
     </div>
   </dialog>
 
@@ -712,9 +773,64 @@
     const drawerBackdrop = document.getElementById("drawerBackdrop");
     const drawButton = document.getElementById("drawButton");
     const resultLine = document.getElementById("resultLine");
+    const cardElements = {
+      left: document.querySelector(".left-card"),
+      right: document.querySelector(".right-card")
+    };
     const field = (id) => document.getElementById(id);
     const savedHostKey = "geiger.piHost";
     const savedPasswordKey = "geiger.password";
+    const backCard = "🂠";
+    const sides = ["left", "right"];
+    const suits = [
+      { name: "spades", symbol: "♠", color: "black", base: 0x1F0A0 },
+      { name: "hearts", symbol: "♥", color: "red", base: 0x1F0B0 },
+      { name: "diamonds", symbol: "♦", color: "red", base: 0x1F0C0 },
+      { name: "clubs", symbol: "♣", color: "black", base: 0x1F0D0 }
+    ];
+    const ranks = [
+      { label: "A", name: "Ace", offset: 1 },
+      { label: "2", name: "2", offset: 2 },
+      { label: "3", name: "3", offset: 3 },
+      { label: "4", name: "4", offset: 4 },
+      { label: "5", name: "5", offset: 5 },
+      { label: "6", name: "6", offset: 6 },
+      { label: "7", name: "7", offset: 7 },
+      { label: "8", name: "8", offset: 8 },
+      { label: "9", name: "9", offset: 9 },
+      { label: "10", name: "10", offset: 10 },
+      { label: "J", name: "Jack", offset: 11 },
+      { label: "Q", name: "Queen", offset: 13 },
+      { label: "K", name: "King", offset: 14 }
+    ];
+    const cards = suits.flatMap((suit, suitIndex) => (
+      ranks.map((rank, rankIndex) => ({
+        index: suitIndex * ranks.length + rankIndex,
+        suit: suit.name,
+        suitSymbol: suit.symbol,
+        rank: rank.label,
+        rankName: rank.name,
+        color: suit.color,
+        glyph: String.fromCodePoint(suit.base + rank.offset),
+        label: `${rank.label}${suit.symbol}`,
+        name: `${rank.name} of ${suit.name}`
+      }))
+    ));
+    const state = {
+      phase: "idle",
+      drawNumber: null,
+      pair: { left: null, right: null },
+      faceUp: { left: false, right: false },
+      openedSide: null,
+      selections: {
+        left: { suit: null, rank: null },
+        right: { suit: null, rank: null }
+      },
+      stats: {
+        bothCardsRight: 0,
+        openCardRight: 0
+      }
+    };
     let isCounting = false;
 
     function loadStoredValue(key) {
@@ -780,13 +896,204 @@
     }
 
     function closeHelp() {
-      helpDialog.close();
+      if (typeof helpDialog.close === "function") {
+        helpDialog.close();
+      } else {
+        helpDialog.removeAttribute("open");
+      }
       helpButton.focus();
     }
 
-    function setResult(text, type = "") {
+    function setCounter(type = "") {
+      const { bothCardsRight, openCardRight } = state.stats;
+      const percent = openCardRight > 0 ? Math.round((bothCardsRight / openCardRight) * 100) : 0;
       resultLine.className = `result-line${type ? ` ${type}` : ""}`;
-      resultLine.textContent = text;
+      resultLine.textContent = `${bothCardsRight} / ${openCardRight} (${percent}%)`;
+    }
+
+    function setButtonState(label, disabled, calling = false) {
+      drawButton.textContent = label;
+      drawButton.disabled = disabled;
+      drawButton.classList.toggle("is-calling", calling);
+    }
+
+    function resetSelections() {
+      state.selections = {
+        left: { suit: null, rank: null },
+        right: { suit: null, rank: null }
+      };
+
+      document.querySelectorAll(".choice-button").forEach((choice) => {
+        choice.classList.remove("is-selected");
+        choice.setAttribute("aria-pressed", "false");
+      });
+    }
+
+    function setChoiceButtonsEnabled(enabled) {
+      document.querySelectorAll(".choice-button").forEach((choice) => {
+        choice.disabled = !enabled;
+      });
+    }
+
+    function clearCardResult(side) {
+      cardElements[side].classList.remove("is-correct", "is-wrong");
+    }
+
+    function showHiddenCard(side) {
+      const element = cardElements[side];
+      element.textContent = backCard;
+      element.classList.add("back", "is-hidden");
+      element.classList.remove("red", "is-flipping", "is-correct", "is-wrong");
+      element.setAttribute("aria-label", `Hidden ${side} card`);
+      state.faceUp[side] = false;
+    }
+
+    function showCardBack(side) {
+      const element = cardElements[side];
+      element.textContent = backCard;
+      element.classList.add("back");
+      element.classList.remove("red", "is-hidden", "is-correct", "is-wrong");
+      element.setAttribute("aria-label", `Face-down ${side} card`);
+      state.faceUp[side] = false;
+    }
+
+    function showCardFace(side) {
+      const card = state.pair[side];
+      const element = cardElements[side];
+      if (!card) {
+        showHiddenCard(side);
+        return;
+      }
+      element.textContent = card.glyph;
+      element.classList.remove("back", "is-hidden");
+      element.classList.toggle("red", card.color === "red");
+      element.setAttribute("aria-label", `${side} card: ${card.name}`);
+      state.faceUp[side] = true;
+    }
+
+    function flipCard(side, faceUp) {
+      const element = cardElements[side];
+      element.classList.remove("is-flipping");
+      void element.offsetWidth;
+      element.classList.add("is-flipping");
+
+      let changed = false;
+      const applyFace = () => {
+        if (changed) {
+          return;
+        }
+        changed = true;
+        if (faceUp) {
+          showCardFace(side);
+        } else {
+          showCardBack(side);
+        }
+      };
+
+      const halfway = window.setTimeout(applyFace, 300);
+
+      return new Promise((resolve) => {
+        let finished = false;
+        let fallback = null;
+        const finish = () => {
+          if (finished) {
+            return;
+          }
+          finished = true;
+          window.clearTimeout(halfway);
+          window.clearTimeout(fallback);
+          applyFace();
+          element.classList.remove("is-flipping");
+          resolve();
+        };
+        element.addEventListener("animationend", finish, { once: true });
+        fallback = window.setTimeout(finish, 760);
+      });
+    }
+
+    function applyCardResult(side, isCorrect) {
+      const element = cardElements[side];
+      element.classList.toggle("is-correct", isCorrect);
+      element.classList.toggle("is-wrong", !isCorrect);
+    }
+
+    function resetRoundSurface() {
+      resetSelections();
+      setChoiceButtonsEnabled(false);
+      sides.forEach((side) => {
+        clearCardResult(side);
+        showHiddenCard(side);
+      });
+      state.drawNumber = null;
+      state.pair = { left: null, right: null };
+      state.faceUp = { left: false, right: false };
+      state.openedSide = null;
+      state.phase = "idle";
+      setButtonState("DRAW PAIR", false);
+    }
+
+    function prepareDrawnPair() {
+      const drawNumber = Math.floor(Math.random() * (cards.length * cards.length));
+      const firstCardIndex = Math.floor(drawNumber / cards.length);
+      const secondCardIndex = drawNumber % cards.length;
+
+      state.drawNumber = drawNumber;
+      state.pair = {
+        left: cards[firstCardIndex],
+        right: cards[secondCardIndex]
+      };
+      state.faceUp = { left: false, right: false };
+      state.openedSide = null;
+
+      console.log("Drawn cards", {
+        drawNumber,
+        left: `${state.pair.left.index}: ${state.pair.left.label} (${state.pair.left.name})`,
+        right: `${state.pair.right.index}: ${state.pair.right.label} (${state.pair.right.name})`
+      });
+
+      sides.forEach(showCardBack);
+    }
+
+    function allSelectionsMade() {
+      return sides.every((side) => (
+        state.selections[side].suit && state.selections[side].rank
+      ));
+    }
+
+    function cardGuessIsCorrect(side) {
+      const selection = state.selections[side];
+      const card = state.pair[side];
+      return Boolean(card && selection.suit === card.suitSymbol && selection.rank === card.rank);
+    }
+
+    async function finishNaming() {
+      if (state.phase !== "naming" || !allSelectionsMade()) {
+        return;
+      }
+
+      state.phase = "revealing";
+      setChoiceButtonsEnabled(false);
+
+      const hiddenSide = state.openedSide === "left" ? "right" : "left";
+      await flipCard(hiddenSide, true);
+
+      const leftCorrect = cardGuessIsCorrect("left");
+      const rightCorrect = cardGuessIsCorrect("right");
+      const openCardCorrect = cardGuessIsCorrect(state.openedSide);
+
+      applyCardResult("left", leftCorrect);
+      applyCardResult("right", rightCorrect);
+
+      if (openCardCorrect) {
+        state.stats.openCardRight += 1;
+        if (leftCorrect && rightCorrect) {
+          state.stats.bothCardsRight += 1;
+        }
+      }
+
+      state.phase = "complete";
+      setCounter();
+      setButtonState("DRAW PAIR", false);
     }
 
     function buildRequestUrl() {
@@ -820,14 +1127,13 @@
     }
 
     async function drawPair() {
-      if (isCounting) {
+      if (isCounting || state.phase === "calling" || state.phase === "revealing") {
         return;
       }
 
       if (!form.checkValidity()) {
         openSettings();
         requestAnimationFrame(() => form.reportValidity());
-        setResult("Complete settings first.", "error");
         return;
       }
 
@@ -837,13 +1143,15 @@
         url = buildRequestUrl();
       } catch (error) {
         openSettings();
-        setResult("Check the Pi IP or host value.", "error");
         return;
       }
 
       isCounting = true;
-      drawButton.disabled = true;
-      setResult("Counting...", "waiting");
+      state.phase = "calling";
+      resetSelections();
+      setChoiceButtonsEnabled(false);
+      prepareDrawnPair();
+      setButtonState("Calling...", true, true);
 
       try {
         const response = await fetch(url.href, {
@@ -858,16 +1166,28 @@
           throw new Error(detail);
         }
 
-        setResult(`Impulses: ${data.impulses}`);
+        const impulses = Number(data.impulses);
+        if (!Number.isFinite(impulses)) {
+          throw new Error("missing impulse count");
+        }
+
+        state.openedSide = impulses % 2 === 0 ? "left" : "right";
+        await flipCard(state.openedSide, true);
+        state.phase = "naming";
+        setButtonState("NAME CARDS", true);
+        setChoiceButtonsEnabled(true);
       } catch (error) {
-        setResult(errorMessageFor(error), "error");
+        console.error(errorMessageFor(error));
+        state.phase = "idle";
+        setButtonState("DRAW PAIR", false);
       } finally {
-        drawButton.disabled = false;
         isCounting = false;
       }
     }
 
     restoreConnectionDetails();
+    setCounter();
+    resetRoundSurface();
 
     field("piHost").addEventListener("input", saveConnectionDetails);
     field("password").addEventListener("input", saveConnectionDetails);
@@ -882,14 +1202,17 @@
     document.querySelectorAll(".choice-section").forEach((section) => {
       section.addEventListener("click", (event) => {
         const button = event.target.closest(".choice-button");
-        if (!button || !section.contains(button)) {
+        if (!button || !section.contains(button) || button.disabled || state.phase !== "naming") {
           return;
         }
+        const [side, kind] = section.dataset.choiceSection.split("-");
+        state.selections[side][kind] = button.textContent.trim();
         section.querySelectorAll(".choice-button").forEach((choice) => {
           const selected = choice === button;
           choice.classList.toggle("is-selected", selected);
           choice.setAttribute("aria-pressed", selected ? "true" : "false");
         });
+        finishNaming();
       });
     });
 
@@ -903,6 +1226,45 @@
         closeSettings();
       }
     });
+
+    window.render_game_to_text = () => {
+      const visibleState = Object.fromEntries(sides.map((side) => {
+        const card = state.pair[side];
+        const element = cardElements[side];
+        let shown = "hidden";
+        if (!element.classList.contains("is-hidden")) {
+          shown = state.faceUp[side] && card ? card.label : "back";
+        }
+        return [side, {
+          shown,
+          actual: card ? card.label : null,
+          faceUp: state.faceUp[side],
+          border: element.classList.contains("is-correct")
+            ? "green"
+            : element.classList.contains("is-wrong")
+              ? "red"
+              : "none"
+        }];
+      }));
+
+      return JSON.stringify({
+        coordinate_note: "DOM game surface: left and right cards are centered between left/right choice banks.",
+        phase: state.phase,
+        drawNumber: state.drawNumber,
+        openedSide: state.openedSide,
+        cards: visibleState,
+        selections: state.selections,
+        counter: {
+          bothCardsRight: state.stats.bothCardsRight,
+          openCardRight: state.stats.openCardRight,
+          display: resultLine.textContent
+        },
+        drawButton: {
+          label: drawButton.textContent,
+          disabled: drawButton.disabled
+        }
+      });
+    };
   </script>
 </body>
 </html>
