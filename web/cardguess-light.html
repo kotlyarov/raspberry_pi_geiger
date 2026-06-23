@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>Card Guess</title>
+  <title>Card Guess Light</title>
   <link rel="icon" href="data:,">
   <style>
     :root {
@@ -198,7 +198,7 @@
 
     .game-stage {
       display: grid;
-      grid-template-columns: 216px minmax(500px, 1fr) 216px;
+      grid-template-columns: 236px minmax(500px, 1fr) 236px;
       align-items: center;
       gap: clamp(24px, 3.2vw, 46px);
       min-height: 720px;
@@ -207,11 +207,11 @@
 
     .choice-stack {
       display: grid;
-      grid-template-columns: 92px 96px;
-      gap: 18px;
+      grid-template-columns: repeat(2, 104px);
+      gap: 16px;
       align-content: center;
       align-items: center;
-      min-height: 680px;
+      min-height: 430px;
     }
 
     .choice-section {
@@ -228,19 +228,19 @@
     .suit-grid {
       display: grid;
       grid-template-columns: 1fr;
-      gap: 16px;
+      gap: 8px;
       align-content: center;
-      min-height: 560px;
     }
 
     .choice-button {
-      min-height: 42px;
+      width: 104px;
+      height: 92px;
       border: 1px solid var(--line);
       border-radius: 6px;
       background: rgba(255, 255, 255, 0.86);
       color: var(--ink);
-      padding: 0 12px;
-      font-size: 1.16rem;
+      padding: 0;
+      font-size: 2rem;
       font-weight: 820;
       line-height: 1;
       box-shadow: 0 10px 24px rgba(19, 31, 36, 0.05);
@@ -271,8 +271,6 @@
     }
 
     .suit-grid .choice-button {
-      min-height: 92px;
-      padding: 0;
       font-family: "Apple Symbols", "Segoe UI Symbol", "Noto Sans Symbols 2", "Noto Sans Symbols", serif;
       font-size: 4.3rem;
       font-weight: 400;
@@ -593,16 +591,16 @@
 </head>
 <body>
   <div class="card-watermarks" aria-hidden="true">
-    <span class="mark-1">P(card) = 1/52</span>
-    <span class="mark-2">A 2 3 4 5 6 7 8 9 10 J Q K</span>
+    <span class="mark-1">P(card) = 1/16</span>
+    <span class="mark-2">A J Q K</span>
     <span class="mark-3">♠ ♥ ♦ ♣</span>
-    <span class="mark-4">C(52,2)</span>
+    <span class="mark-4">16 x 16</span>
   </div>
 
   <main>
     <header class="topbar">
       <a class="home-link" href="./index.html">Index</a>
-      <h1>Card Guess</h1>
+      <h1>Card Guess Light</h1>
       <div class="top-actions">
         <button class="help-button" id="helpButton" type="button" aria-label="How the card guess works" title="How the card guess works">?</button>
         <button class="settings-button" id="settingsButton" type="button" aria-controls="settingsDrawer" aria-expanded="false">Settings</button>
@@ -623,15 +621,6 @@
         <div class="choice-section" data-choice-section="left-rank" aria-label="Left card ranks">
           <div class="rank-grid">
             <button class="choice-button" type="button" aria-pressed="false">A</button>
-            <button class="choice-button" type="button" aria-pressed="false">2</button>
-            <button class="choice-button" type="button" aria-pressed="false">3</button>
-            <button class="choice-button" type="button" aria-pressed="false">4</button>
-            <button class="choice-button" type="button" aria-pressed="false">5</button>
-            <button class="choice-button" type="button" aria-pressed="false">6</button>
-            <button class="choice-button" type="button" aria-pressed="false">7</button>
-            <button class="choice-button" type="button" aria-pressed="false">8</button>
-            <button class="choice-button" type="button" aria-pressed="false">9</button>
-            <button class="choice-button" type="button" aria-pressed="false">10</button>
             <button class="choice-button" type="button" aria-pressed="false">J</button>
             <button class="choice-button" type="button" aria-pressed="false">Q</button>
             <button class="choice-button" type="button" aria-pressed="false">K</button>
@@ -654,15 +643,6 @@
         <div class="choice-section" data-choice-section="right-rank" aria-label="Right card ranks">
           <div class="rank-grid">
             <button class="choice-button" type="button" aria-pressed="false">A</button>
-            <button class="choice-button" type="button" aria-pressed="false">2</button>
-            <button class="choice-button" type="button" aria-pressed="false">3</button>
-            <button class="choice-button" type="button" aria-pressed="false">4</button>
-            <button class="choice-button" type="button" aria-pressed="false">5</button>
-            <button class="choice-button" type="button" aria-pressed="false">6</button>
-            <button class="choice-button" type="button" aria-pressed="false">7</button>
-            <button class="choice-button" type="button" aria-pressed="false">8</button>
-            <button class="choice-button" type="button" aria-pressed="false">9</button>
-            <button class="choice-button" type="button" aria-pressed="false">10</button>
             <button class="choice-button" type="button" aria-pressed="false">J</button>
             <button class="choice-button" type="button" aria-pressed="false">Q</button>
             <button class="choice-button" type="button" aria-pressed="false">K</button>
@@ -760,7 +740,7 @@
         <h2 id="helpTitle">How it works</h2>
         <button class="close-button" id="closeHelpButton" type="button" aria-label="Close help">x</button>
       </div>
-      <p>DRAW PAIR chooses two cards and calls the Geiger counter. The count reveals one card; name both cards to reveal the other and score the attempt.</p>
+      <p>DRAW PAIR chooses two cards from A, J, Q, and K only, then calls the Geiger counter. The count reveals one card; name both cards to reveal the other and score the attempt.</p>
     </div>
   </dialog>
 
@@ -793,15 +773,6 @@
     ];
     const ranks = [
       { label: "A", name: "Ace", offset: 1 },
-      { label: "2", name: "2", offset: 2 },
-      { label: "3", name: "3", offset: 3 },
-      { label: "4", name: "4", offset: 4 },
-      { label: "5", name: "5", offset: 5 },
-      { label: "6", name: "6", offset: 6 },
-      { label: "7", name: "7", offset: 7 },
-      { label: "8", name: "8", offset: 8 },
-      { label: "9", name: "9", offset: 9 },
-      { label: "10", name: "10", offset: 10 },
       { label: "J", name: "Jack", offset: 11 },
       { label: "Q", name: "Queen", offset: 13 },
       { label: "K", name: "King", offset: 14 }
@@ -1255,6 +1226,8 @@
 
       return JSON.stringify({
         coordinate_note: "DOM game surface: left and right cards are centered between left/right choice banks.",
+        deckSize: cards.length,
+        drawMax: (cards.length * cards.length) - 1,
         phase: state.phase,
         drawNumber: state.drawNumber,
         openedSide: state.openedSide,

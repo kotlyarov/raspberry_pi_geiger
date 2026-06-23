@@ -81,7 +81,7 @@
 
     .links {
       display: grid;
-      grid-template-columns: repeat(2, minmax(0, 1fr));
+      grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
       gap: 16px;
     }
 
@@ -198,6 +198,16 @@
       transform: rotate(9deg);
     }
 
+    .mini-card.binary-black {
+      background: var(--ink);
+      color: #ffffff;
+    }
+
+    .mini-card.binary-red {
+      background: var(--red);
+      color: #ffffff;
+    }
+
     @media (max-width: 760px) {
       main {
         width: min(100vw - 22px, 560px);
@@ -257,6 +267,32 @@
         <div class="card-visual" aria-hidden="true">
           <div class="mini-card">A</div>
           <div class="mini-card">3</div>
+        </div>
+      </a>
+
+      <a class="destination" href="./cardguess-light.html">
+        <div class="destination-top">
+          <span class="label">Card guess light</span>
+          <span class="arrow" aria-hidden="true">></span>
+        </div>
+        <h2>Card guess light</h2>
+        <p>A smaller card-pair guessing game using only aces, jacks, queens, and kings.</p>
+        <div class="card-visual" aria-hidden="true">
+          <div class="mini-card">Q</div>
+          <div class="mini-card">K</div>
+        </div>
+      </a>
+
+      <a class="destination" href="./cardguess-binary.html">
+        <div class="destination-top">
+          <span class="label">Card guess binary</span>
+          <span class="arrow" aria-hidden="true">></span>
+        </div>
+        <h2>Card guess binary</h2>
+        <p>The smallest card-pair guessing game: choose only black or red on each side.</p>
+        <div class="card-visual" aria-hidden="true">
+          <div class="mini-card binary-black"></div>
+          <div class="mini-card binary-red"></div>
         </div>
       </a>
     </nav>

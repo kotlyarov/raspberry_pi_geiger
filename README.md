@@ -289,9 +289,11 @@ The repository includes standalone browser pages:
 web/index.html
 web/coin.html
 web/cardguess.html
+web/cardguess-light.html
+web/cardguess-binary.html
 ```
 
-Open `web/index.html` on another computer to choose a page. `web/coin.html` contains the Raspberry Pi counter-backed coin toss interface. Its Settings menu asks for the Raspberry Pi IP or host, password, seconds, and optional GPIO settings, and stores the Pi host and password in that browser's local storage so you do not need to re-enter them every time. `web/cardguess.html` is a CSS-only placeholder for the future card guessing interface.
+Open `web/index.html` on another computer to choose a page. `web/coin.html` contains the Raspberry Pi counter-backed coin toss interface. Its Settings menu asks for the Raspberry Pi IP or host, password, seconds, and optional GPIO settings, and stores the Pi host and password in that browser's local storage so you do not need to re-enter them every time. `web/cardguess.html`, `web/cardguess-light.html`, and `web/cardguess-binary.html` contain card-pair guessing interfaces backed by the same Pi counter API.
 
 ## Troubleshooting
 

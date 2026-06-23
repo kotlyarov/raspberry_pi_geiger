@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>Card Guess</title>
+  <title>Card Guess Binary</title>
   <link rel="icon" href="data:,">
   <style>
     :root {
@@ -198,7 +198,7 @@
 
     .game-stage {
       display: grid;
-      grid-template-columns: 216px minmax(500px, 1fr) 216px;
+      grid-template-columns: 168px minmax(500px, 1fr) 168px;
       align-items: center;
       gap: clamp(24px, 3.2vw, 46px);
       min-height: 720px;
@@ -207,11 +207,12 @@
 
     .choice-stack {
       display: grid;
-      grid-template-columns: 92px 96px;
-      gap: 18px;
+      grid-template-columns: 1fr;
+      gap: 10px;
       align-content: center;
       align-items: center;
-      min-height: 680px;
+      justify-items: center;
+      min-height: 300px;
     }
 
     .choice-section {
@@ -219,28 +220,22 @@
       gap: 8px;
     }
 
-    .rank-grid {
+    .color-grid {
       display: grid;
       grid-template-columns: 1fr;
       gap: 8px;
-    }
-
-    .suit-grid {
-      display: grid;
-      grid-template-columns: 1fr;
-      gap: 16px;
       align-content: center;
-      min-height: 560px;
     }
 
     .choice-button {
-      min-height: 42px;
+      width: 132px;
+      height: 118px;
       border: 1px solid var(--line);
       border-radius: 6px;
       background: rgba(255, 255, 255, 0.86);
       color: var(--ink);
-      padding: 0 12px;
-      font-size: 1.16rem;
+      padding: 0;
+      font-size: 2rem;
       font-weight: 820;
       line-height: 1;
       box-shadow: 0 10px 24px rgba(19, 31, 36, 0.05);
@@ -270,18 +265,17 @@
       box-shadow: 0 0 0 3px rgba(15, 118, 110, 0.14);
     }
 
-    .suit-grid .choice-button {
-      min-height: 92px;
-      padding: 0;
-      font-family: "Apple Symbols", "Segoe UI Symbol", "Noto Sans Symbols 2", "Noto Sans Symbols", serif;
-      font-size: 4.3rem;
-      font-weight: 400;
-      line-height: 0.88;
-      color: var(--ink);
+    .color-grid .choice-button {
+      border-color: rgba(23, 32, 39, 0.14);
+      background: var(--ink);
+      color: #ffffff;
+      font-size: 1.08rem;
+      letter-spacing: 0;
     }
 
-    .suit-grid .choice-button.red {
-      color: var(--red);
+    .color-grid .choice-button.red-choice {
+      border-color: rgba(180, 35, 24, 0.16);
+      background: var(--red);
     }
 
     .choice-button.is-selected {
@@ -296,6 +290,18 @@
     }
 
     .choice-button.red.is-selected {
+      color: #ffffff;
+    }
+
+    .color-grid .choice-button:disabled:hover,
+    .color-grid .choice-button.is-selected {
+      background: var(--ink);
+      color: #ffffff;
+    }
+
+    .color-grid .choice-button.red-choice:disabled:hover,
+    .color-grid .choice-button.red-choice.is-selected {
+      background: var(--red);
       color: #ffffff;
     }
 
@@ -338,6 +344,18 @@
 
     .unicode-card.back {
       color: #4285f4;
+    }
+
+    .unicode-card.binary-face {
+      text-shadow: none;
+    }
+
+    .unicode-card.black-face {
+      background: var(--ink);
+    }
+
+    .unicode-card.red-face {
+      background: #ff0000;
     }
 
     .unicode-card.is-hidden {
@@ -593,54 +611,34 @@
 </head>
 <body>
   <div class="card-watermarks" aria-hidden="true">
-    <span class="mark-1">P(card) = 1/52</span>
-    <span class="mark-2">A 2 3 4 5 6 7 8 9 10 J Q K</span>
-    <span class="mark-3">♠ ♥ ♦ ♣</span>
-    <span class="mark-4">C(52,2)</span>
+    <span class="mark-1">P(color) = 1/2</span>
+    <span class="mark-2">BLACK RED</span>
+    <span class="mark-3">0 1</span>
+    <span class="mark-4">2 x 2</span>
   </div>
 
   <main>
     <header class="topbar">
       <a class="home-link" href="./index.html">Index</a>
-      <h1>Card Guess</h1>
+      <h1>Card Guess Binary</h1>
       <div class="top-actions">
         <button class="help-button" id="helpButton" type="button" aria-label="How the card guess works" title="How the card guess works">?</button>
         <button class="settings-button" id="settingsButton" type="button" aria-controls="settingsDrawer" aria-expanded="false">Settings</button>
       </div>
     </header>
 
-    <section class="game-stage" aria-label="Card guess interface">
+    <section class="game-stage" aria-label="Card guess binary interface">
       <div class="choice-stack left-bank" aria-label="Left card choices">
-        <div class="choice-section" data-choice-section="left-suit" aria-label="Left card suits">
-          <div class="suit-grid">
-            <button class="choice-button" type="button" aria-pressed="false">♠</button>
-            <button class="choice-button red" type="button" aria-pressed="false">♥</button>
-            <button class="choice-button red" type="button" aria-pressed="false">♦</button>
-            <button class="choice-button" type="button" aria-pressed="false">♣</button>
-          </div>
-        </div>
-
-        <div class="choice-section" data-choice-section="left-rank" aria-label="Left card ranks">
-          <div class="rank-grid">
-            <button class="choice-button" type="button" aria-pressed="false">A</button>
-            <button class="choice-button" type="button" aria-pressed="false">2</button>
-            <button class="choice-button" type="button" aria-pressed="false">3</button>
-            <button class="choice-button" type="button" aria-pressed="false">4</button>
-            <button class="choice-button" type="button" aria-pressed="false">5</button>
-            <button class="choice-button" type="button" aria-pressed="false">6</button>
-            <button class="choice-button" type="button" aria-pressed="false">7</button>
-            <button class="choice-button" type="button" aria-pressed="false">8</button>
-            <button class="choice-button" type="button" aria-pressed="false">9</button>
-            <button class="choice-button" type="button" aria-pressed="false">10</button>
-            <button class="choice-button" type="button" aria-pressed="false">J</button>
-            <button class="choice-button" type="button" aria-pressed="false">Q</button>
-            <button class="choice-button" type="button" aria-pressed="false">K</button>
+        <div class="choice-section" data-choice-section="left-color" aria-label="Left card color">
+          <div class="color-grid">
+            <button class="choice-button" type="button" data-choice-value="black" aria-pressed="false">BLACK</button>
+            <button class="choice-button red-choice" type="button" data-choice-value="red" aria-pressed="false">RED</button>
           </div>
         </div>
       </div>
 
       <div class="pair-board">
-        <div class="result-line" id="resultLine">0/0 (0%)</div>
+        <div class="result-line" id="resultLine">0 / 0 (0%, performance: 0.00)</div>
 
         <div class="card-pair" aria-label="Selected card pair">
           <span class="unicode-card left-card back is-hidden" aria-label="Hidden left card">🂠</span>
@@ -651,30 +649,10 @@
       </div>
 
       <div class="choice-stack right-bank" aria-label="Right card choices">
-        <div class="choice-section" data-choice-section="right-rank" aria-label="Right card ranks">
-          <div class="rank-grid">
-            <button class="choice-button" type="button" aria-pressed="false">A</button>
-            <button class="choice-button" type="button" aria-pressed="false">2</button>
-            <button class="choice-button" type="button" aria-pressed="false">3</button>
-            <button class="choice-button" type="button" aria-pressed="false">4</button>
-            <button class="choice-button" type="button" aria-pressed="false">5</button>
-            <button class="choice-button" type="button" aria-pressed="false">6</button>
-            <button class="choice-button" type="button" aria-pressed="false">7</button>
-            <button class="choice-button" type="button" aria-pressed="false">8</button>
-            <button class="choice-button" type="button" aria-pressed="false">9</button>
-            <button class="choice-button" type="button" aria-pressed="false">10</button>
-            <button class="choice-button" type="button" aria-pressed="false">J</button>
-            <button class="choice-button" type="button" aria-pressed="false">Q</button>
-            <button class="choice-button" type="button" aria-pressed="false">K</button>
-          </div>
-        </div>
-
-        <div class="choice-section" data-choice-section="right-suit" aria-label="Right card suits">
-          <div class="suit-grid">
-            <button class="choice-button" type="button" aria-pressed="false">♠</button>
-            <button class="choice-button red" type="button" aria-pressed="false">♥</button>
-            <button class="choice-button red" type="button" aria-pressed="false">♦</button>
-            <button class="choice-button" type="button" aria-pressed="false">♣</button>
+        <div class="choice-section" data-choice-section="right-color" aria-label="Right card color">
+          <div class="color-grid">
+            <button class="choice-button" type="button" data-choice-value="black" aria-pressed="false">BLACK</button>
+            <button class="choice-button red-choice" type="button" data-choice-value="red" aria-pressed="false">RED</button>
           </div>
         </div>
       </div>
@@ -760,7 +738,7 @@
         <h2 id="helpTitle">How it works</h2>
         <button class="close-button" id="closeHelpButton" type="button" aria-label="Close help">x</button>
       </div>
-      <p>DRAW PAIR chooses two cards and calls the Geiger counter. The count reveals one card; name both cards to reveal the other and score the attempt.</p>
+      <p>DRAW PAIR chooses two black-or-red cards, then calls the Geiger counter. The count reveals one card; name both colors to reveal the other and score the attempt.</p>
     </div>
   </dialog>
 
@@ -785,40 +763,10 @@
     const savedPasswordKey = "geiger.password";
     const backCard = "🂠";
     const sides = ["left", "right"];
-    const suits = [
-      { name: "spades", symbol: "♠", color: "black", base: 0x1F0A0 },
-      { name: "hearts", symbol: "♥", color: "red", base: 0x1F0B0 },
-      { name: "diamonds", symbol: "♦", color: "red", base: 0x1F0C0 },
-      { name: "clubs", symbol: "♣", color: "black", base: 0x1F0D0 }
+    const cards = [
+      { index: 0, value: "black", color: "black", label: "BLACK", name: "black card" },
+      { index: 1, value: "red", color: "red", label: "RED", name: "red card" }
     ];
-    const ranks = [
-      { label: "A", name: "Ace", offset: 1 },
-      { label: "2", name: "2", offset: 2 },
-      { label: "3", name: "3", offset: 3 },
-      { label: "4", name: "4", offset: 4 },
-      { label: "5", name: "5", offset: 5 },
-      { label: "6", name: "6", offset: 6 },
-      { label: "7", name: "7", offset: 7 },
-      { label: "8", name: "8", offset: 8 },
-      { label: "9", name: "9", offset: 9 },
-      { label: "10", name: "10", offset: 10 },
-      { label: "J", name: "Jack", offset: 11 },
-      { label: "Q", name: "Queen", offset: 13 },
-      { label: "K", name: "King", offset: 14 }
-    ];
-    const cards = suits.flatMap((suit, suitIndex) => (
-      ranks.map((rank, rankIndex) => ({
-        index: suitIndex * ranks.length + rankIndex,
-        suit: suit.name,
-        suitSymbol: suit.symbol,
-        rank: rank.label,
-        rankName: rank.name,
-        color: suit.color,
-        glyph: String.fromCodePoint(suit.base + rank.offset),
-        label: `${rank.label}${suit.symbol}`,
-        name: `${rank.name} of ${suit.name}`
-      }))
-    ));
     const state = {
       phase: "idle",
       drawNumber: null,
@@ -826,8 +774,8 @@
       faceUp: { left: false, right: false },
       openedSide: null,
       selections: {
-        left: { suit: null, rank: null },
-        right: { suit: null, rank: null }
+        left: { color: null },
+        right: { color: null }
       },
       stats: {
         bothCardsRight: 0,
@@ -925,8 +873,8 @@
 
     function resetSelections() {
       state.selections = {
-        left: { suit: null, rank: null },
-        right: { suit: null, rank: null }
+        left: { color: null },
+        right: { color: null }
       };
 
       document.querySelectorAll(".choice-button").forEach((choice) => {
@@ -949,7 +897,7 @@
       const element = cardElements[side];
       element.textContent = backCard;
       element.classList.add("back", "is-hidden");
-      element.classList.remove("red", "is-flipping", "is-correct", "is-wrong");
+      element.classList.remove("binary-face", "black-face", "red-face", "red", "is-flipping", "is-correct", "is-wrong");
       element.setAttribute("aria-label", `Hidden ${side} card`);
       state.faceUp[side] = false;
     }
@@ -958,7 +906,7 @@
       const element = cardElements[side];
       element.textContent = backCard;
       element.classList.add("back");
-      element.classList.remove("red", "is-hidden", "is-correct", "is-wrong");
+      element.classList.remove("binary-face", "black-face", "red-face", "red", "is-hidden", "is-correct", "is-wrong");
       element.setAttribute("aria-label", `Face-down ${side} card`);
       state.faceUp[side] = false;
     }
@@ -970,8 +918,11 @@
         showHiddenCard(side);
         return;
       }
-      element.textContent = card.glyph;
+      element.textContent = "";
       element.classList.remove("back", "is-hidden");
+      element.classList.add("binary-face");
+      element.classList.toggle("black-face", card.color === "black");
+      element.classList.toggle("red-face", card.color === "red");
       element.classList.toggle("red", card.color === "red");
       element.setAttribute("aria-label", `${side} card: ${card.name}`);
       state.faceUp[side] = true;
@@ -1053,8 +1004,8 @@
 
       console.log("Drawn cards", {
         drawNumber,
-        left: `${state.pair.left.index}: ${state.pair.left.label} (${state.pair.left.name})`,
-        right: `${state.pair.right.index}: ${state.pair.right.label} (${state.pair.right.name})`
+        left: `${state.pair.left.index}: ${state.pair.left.label}`,
+        right: `${state.pair.right.index}: ${state.pair.right.label}`
       });
 
       sides.forEach(showCardBack);
@@ -1062,14 +1013,14 @@
 
     function allSelectionsMade() {
       return sides.every((side) => (
-        state.selections[side].suit && state.selections[side].rank
+        state.selections[side].color
       ));
     }
 
     function cardGuessIsCorrect(side) {
       const selection = state.selections[side];
       const card = state.pair[side];
-      return Boolean(card && selection.suit === card.suitSymbol && selection.rank === card.rank);
+      return Boolean(card && selection.color === card.value);
     }
 
     async function finishNaming() {
@@ -1212,7 +1163,7 @@
           return;
         }
         const [side, kind] = section.dataset.choiceSection.split("-");
-        state.selections[side][kind] = button.textContent.trim();
+        state.selections[side][kind] = button.dataset.choiceValue || button.textContent.trim().toLowerCase();
         section.querySelectorAll(".choice-button").forEach((choice) => {
           const selected = choice === button;
           choice.classList.toggle("is-selected", selected);
@@ -1255,6 +1206,8 @@
 
       return JSON.stringify({
         coordinate_note: "DOM game surface: left and right cards are centered between left/right choice banks.",
+        deckSize: cards.length,
+        drawMax: (cards.length * cards.length) - 1,
         phase: state.phase,
         drawNumber: state.drawNumber,
         openedSide: state.openedSide,
